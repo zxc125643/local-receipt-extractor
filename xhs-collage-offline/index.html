@@ -32,6 +32,8 @@
     .btn:active { transform: none; }
     .btn.primary { color: #fff; background: var(--red); border-color: var(--red); }
     .btn.primary:hover { background: var(--red-dark); border-color: var(--red-dark); }
+    .btn.danger { color:#b62f3a; border-color:#efc5c9; background:#fff7f7; }
+    .btn.danger:hover { color:#fff; border-color:#b62f3a; background:#b62f3a; }
     .btn.ghost { background: transparent; }
     .btn.icon { width: 40px; padding: 0; }
     .workspace { display: grid; grid-template-columns: 272px minmax(420px, 1fr) 300px; min-height: calc(100vh - 72px); }
@@ -162,6 +164,7 @@
     .draft-item b, .draft-item small { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .draft-item b { font-size:12px; }
     .draft-item small { color:var(--muted); margin-top:4px; font-size:10px; }
+    .draft-actions { display:flex; gap:7px; }
     .empty-state { text-align:center; padding:34px 10px; color:var(--muted); font-size:12px; }
     .mobile-bar { display:none; }
     @media (max-width: 1050px) { .workspace { grid-template-columns:240px 1fr; } .panel.right { display:none; } }
@@ -303,7 +306,7 @@
     ];
     const imageTones = { original:{css:'none',canvas:'none'}, warm:{css:'saturate(.9) sepia(.12) brightness(1.03)',canvas:'saturate(90%) sepia(12%) brightness(103%)'}, cool:{css:'saturate(.82) hue-rotate(8deg) brightness(1.03)',canvas:'saturate(82%) hue-rotate(8deg) brightness(103%)'}, bright:{css:'saturate(.92) contrast(.94) brightness(1.08)',canvas:'saturate(92%) contrast(94%) brightness(108%)'}, film:{css:'saturate(.72) contrast(.92) sepia(.08)',canvas:'saturate(72%) contrast(92%) sepia(8%)'} };
     const defaultStyle = stylePresets[0];
-    const state = { projectName:'未命名项目', projectDescription:'', assets:[], dragAssetId:null, pages:[], activePageId:null, frameTitle:'', frameSubtitle:'', cols:4, rows:3, gap:defaultStyle.gap, bg:defaultStyle.bg, captionBg:defaultStyle.captionBg, textColor:defaultStyle.textColor, tone:defaultStyle.tone, globalStyle:{...defaultStyle}, previewScale:100, selected:0, cells:[], draftId:null, dragIndex:null, dirty:false, revision:0, saveInFlight:false, pendingAutoSave:false, autoSaveTimer:null };
+    const state = { projectName:'未命名项目', projectDescription:'', assets:[], dragAssetId:null, pages:[], activePageId:null, frameTitle:'', frameSubtitle:'', cols:4, rows:3, gap:defaultStyle.gap, bg:defaultStyle.bg, captionBg:defaultStyle.captionBg, textColor:defaultStyle.textColor, tone:defaultStyle.tone, globalStyle:{...defaultStyle}, previewScale:100, selected:0, cells:[], draftId:null, dragIndex:null, dirty:false, revision:0, savedFingerprint:'', saveInFlight:false, pendingAutoSave:false, autoSaveTimer:null };
     const $ = s => document.querySelector(s);
     const els = { collage:$('#collage'), presets:$('#presets'), cols:$('#colsInput'), rows:$('#rowsInput'), gap:$('#gapInput'), gapValue:$('#gapValue'), bg:$('#bgInput'), captionBg:$('#captionBgInput'), textColor:$('#textColorInput'), imageTone:$('#imageToneInput'), pageStyleMode:$('#pageStyleMode'), pageStylePresets:$('#pageStylePresets'), globalStylePresets:$('#globalStylePresets'), pageStyleHelp:$('#pageStyleHelp'), previewScale:$('#previewScaleInput'), previewScaleValue:$('#previewScaleValue'), preview:$('#selectedPreview'), selectedLabel:$('#selectedLabel'), counter:$('#counter'), gridLabel:$('#gridLabel'), status:$('#status'), saveState:$('#saveState'), autoSaveState:$('#autoSaveState'), draftModal:$('#draftModal'), saveModal:$('#saveModal'), draftList:$('#draftList'), projectName:$('#projectName'), projectDescription:$('#projectDescription'), pageList:$('#pageList'), pageName:$('#pageName'), pageDescription:$('#pageDescription'), activePageTitle:$('#activePageTitle'), assetGrid:$('#assetGrid'), assetCount:$('#assetCount'), assetSummary:$('#assetSummary'), importFeedback:$('#importFeedback') };
 
@@ -359,17 +362,20 @@
     function setMobileSettings(open){ document.body.classList.toggle('mobile-settings-open',open); if(open)setTimeout(()=>$('#mobileSettingsClose').focus(),50); }
     function toast(message,error=false,duration=2600,success=false){ els.status.textContent=message; els.status.classList.toggle('error',error); els.status.classList.toggle('success',success); els.status.classList.add('show'); clearTimeout(toast.timer); toast.timer=setTimeout(()=>els.status.classList.remove('show'),duration); }
     function setSaveState(kind,text){ els.saveState.className=`save-state ${kind||''}`; els.saveState.textContent=text; els.autoSaveState.className=`auto-save-state ${kind||''}`; els.autoSaveState.textContent=text; }
-    function scheduleAutoSave(){ state.dirty=true; state.revision+=1; setSaveState('','有未保存修改'); clearTimeout(state.autoSaveTimer); state.autoSaveTimer=setTimeout(()=>persistDraft(true),1800); }
+    function draftContentFingerprint(payload=draftPayload()){ const {id,updated_at,active_page_id,...content}=payload; return JSON.stringify(content); }
+    function markSavedBaseline(payload=draftPayload()){ state.savedFingerprint=draftContentFingerprint(payload); state.dirty=false; }
+    function scheduleAutoSave(){ clearTimeout(state.autoSaveTimer); if(draftContentFingerprint()===state.savedFingerprint){ state.dirty=false; setSaveState(state.draftId?'saved':'',state.draftId?'✓ 无修改':'尚未修改'); return; } state.dirty=true; state.revision+=1; setSaveState('','有未保存修改'); state.autoSaveTimer=setTimeout(()=>persistDraft(true),1800); }
     function draftPayload(){ syncActivePage(); state.projectName=els.projectName.value.trim()||'未命名项目'; state.projectDescription=els.projectDescription.value; const page=activePage(); return { id:state.draftId, name:state.projectName, project_name:state.projectName, description:state.projectDescription, project_description:state.projectDescription, assets:state.assets, asset_count:state.assets.length, page_count:state.pages.length, active_page_id:state.activePageId, preview_scale:state.previewScale, global_style:state.globalStyle, pages:state.pages.map(p=>({...p,style_mode:p.styleMode,caption_bg:p.captionBg,text_color:p.textColor,background:p.bg})), cols:page?.cols||state.cols, rows:page?.rows||state.rows, gap:page?.gap??state.gap, background:page?.bg||state.bg, caption_bg:page?.captionBg||state.captionBg, text_color:page?.textColor||state.textColor, tone:page?.tone||state.tone, cells:page?.cells||state.cells, updated_at:new Date().toISOString() }; }
     async function request(url,options={}){ const res=await fetch(url,{headers:{'Content-Type':'application/json',...(options.headers||{})},...options}); if(!res.ok) throw new Error((await res.text())||`请求失败 (${res.status})`); const type=res.headers.get('content-type')||''; return type.includes('json')?res.json():null; }
     async function persistDraft(automatic=false){
       if(automatic&&!state.dirty)return;
       if(state.saveInFlight){ state.pendingAutoSave=true; return; }
-      clearTimeout(state.autoSaveTimer); state.saveInFlight=true; state.pendingAutoSave=false; let failed=false; const revision=state.revision, btn=$('#confirmSave'), topBtn=$('#saveBtn');
+      clearTimeout(state.autoSaveTimer); state.saveInFlight=true; state.pendingAutoSave=false; let failed=false; const btn=$('#confirmSave'), topBtn=$('#saveBtn');
       if(!automatic){ const modalName=$('#draftName').value.trim(); if(modalName)els.projectName.value=modalName; btn.disabled=true; btn.textContent='保存中…'; topBtn.disabled=true; }
+      const payload=draftPayload(), savedFingerprint=draftContentFingerprint(payload);
       setSaveState('',automatic?'自动保存中…':'保存中…');
       try {
-        const data=await request(API.save,{method:'POST',body:JSON.stringify(draftPayload())}); state.draftId=data?.id??state.draftId; const time=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}), unchanged=state.revision===revision; state.dirty=!unchanged;
+        const data=await request(API.save,{method:'POST',body:JSON.stringify(payload)}); state.draftId=data?.id??state.draftId; state.savedFingerprint=savedFingerprint; state.dirty=draftContentFingerprint()!==state.savedFingerprint; const time=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
         setSaveState('saved',`${automatic?'✓ 已自动保存':'✓ 已保存'} ${time}`);
         if(!automatic){ els.saveModal.classList.remove('open'); topBtn.innerHTML='✓ <span>已保存</span>'; setTimeout(()=>topBtn.innerHTML='⌁ <span>保存项目</span>',2600); toast(`✓ 项目保存成功：${state.pages.length} 张图片已写入后台`,false,4200,true); }
       } catch(e){ failed=true; state.dirty=true; setSaveState('error',automatic?'自动保存失败':'保存失败'); if(!automatic)toast(`保存失败：${e.message}`,true,4200); else state.autoSaveTimer=setTimeout(()=>persistDraft(true),5000); }
@@ -378,13 +384,18 @@
     }
     function saveDraft(){ return persistDraft(false); }
     async function listDrafts(){
-      if(state.dirty)await persistDraft(true);
       els.draftModal.classList.add('open'); els.draftList.innerHTML='<div class="empty-state">正在读取后台项目…</div>';
-      try { const data=await request(API.list); const list=Array.isArray(data)?data:(data?.drafts||data?.items||[]); els.draftList.innerHTML=list.length?list.map(d=>`<div class="draft-item"><div class="meta"><b>${escapeHtml(d.project_name||d.name||'未命名项目')}</b><small>${d.page_count||1} 张图片 · ${d.updated_at?new Date(d.updated_at).toLocaleString():'时间未知'}</small></div><button class="btn" data-load="${escapeHtml(String(d.id))}">打开</button></div>`).join(''):'<div class="empty-state">后台还没有项目</div>'; }
+      try { const data=await request(API.list); const list=Array.isArray(data)?data:(data?.drafts||data?.items||[]); els.draftList.innerHTML=list.length?list.map(d=>{ const id=escapeAttr(String(d.id)), name=d.project_name||d.name||'未命名项目'; return `<div class="draft-item"><div class="meta"><b>${escapeHtml(name)}</b><small>${d.page_count||1} 张图片 · ${d.updated_at?new Date(d.updated_at).toLocaleString():'时间未知'}</small></div><div class="draft-actions"><button class="btn" data-load="${id}">打开</button><button class="btn danger" data-delete="${id}" data-name="${escapeAttr(name)}">删除</button></div></div>`; }).join(''):'<div class="empty-state">后台还没有项目</div>'; }
       catch(e){ els.draftList.innerHTML=`<div class="empty-state">读取失败<br><small>${escapeHtml(e.message)}</small></div>`; }
     }
+    async function deleteDraft(id,name,button){
+      if(!confirm(`确定删除项目“${name}”吗？\n删除后无法恢复。`))return;
+      button.disabled=true; button.textContent='删除中…';
+      try { await request(API.detail(id),{method:'DELETE'}); if(String(state.draftId)===String(id)){ clearTimeout(state.autoSaveTimer); state.draftId=null; state.pendingAutoSave=false; markSavedBaseline(); setSaveState('','项目已删除 · 当前内容未保存'); } toast(`已删除项目：${name}`,false,3200,true); await listDrafts(); }
+      catch(e){ button.disabled=false; button.textContent='删除'; toast(`删除失败：${e.message}`,true,4200); }
+    }
     async function loadDraft(id){
-      try { const d=await request(API.detail(id)); clearTimeout(state.autoSaveTimer); state.dirty=false; state.revision+=1; state.projectName=d.project_name||d.name||'未命名项目'; state.projectDescription=d.project_description||d.description||''; state.globalStyle=normalizeStyle(d.global_style||{},defaultStyle); state.pages=Array.isArray(d.pages)&&d.pages.length?d.pages.map((p,i)=>createPage(i+1,p)):[createPage(1,{name:d.name||'图片 1',description:d.description||'',cols:d.cols,rows:d.rows,gap:d.gap,background:d.background,caption_bg:d.caption_bg,text_color:d.text_color,tone:d.tone,cells:d.cells})]; updateGlobalFollowers(); state.assets=Array.isArray(d.assets)?d.assets.filter(a=>a.src).map(createAsset):deriveAssets(state.pages); state.previewScale=Math.max(50,Math.min(120,+d.preview_scale||100)); state.dragAssetId=null; state.draftId=d.id??id; els.projectName.value=state.projectName; els.projectDescription.value=state.projectDescription; els.importFeedback.textContent=`已从后台恢复 ${state.assets.length} 张项目素材`; els.draftModal.classList.remove('open'); const target=state.pages.find(p=>p.id===d.active_page_id)||state.pages[0]; activatePage(target.id,false); setSaveState('saved','✓ 后台已恢复'); toast(`项目已恢复，共 ${state.pages.length} 张图片、${state.assets.length} 张素材`); }
+      try { const d=await request(API.detail(id)); clearTimeout(state.autoSaveTimer); state.dirty=false; state.pendingAutoSave=false; state.revision+=1; state.projectName=d.project_name||d.name||'未命名项目'; state.projectDescription=d.project_description||d.description||''; state.globalStyle=normalizeStyle(d.global_style||{},defaultStyle); state.pages=Array.isArray(d.pages)&&d.pages.length?d.pages.map((p,i)=>createPage(i+1,p)):[createPage(1,{name:d.name||'图片 1',description:d.description||'',cols:d.cols,rows:d.rows,gap:d.gap,background:d.background,caption_bg:d.caption_bg,text_color:d.text_color,tone:d.tone,cells:d.cells})]; updateGlobalFollowers(); state.assets=Array.isArray(d.assets)?d.assets.filter(a=>a.src).map(createAsset):deriveAssets(state.pages); state.previewScale=Math.max(50,Math.min(120,+d.preview_scale||100)); state.dragAssetId=null; state.draftId=d.id??id; els.projectName.value=state.projectName; els.projectDescription.value=state.projectDescription; els.importFeedback.textContent=`已从后台恢复 ${state.assets.length} 张项目素材`; els.draftModal.classList.remove('open'); const target=state.pages.find(p=>p.id===d.active_page_id)||state.pages[0]; activatePage(target.id,false); markSavedBaseline(); setSaveState('saved','✓ 后台已恢复'); toast(`项目已恢复，共 ${state.pages.length} 张图片、${state.assets.length} 张素材`); }
       catch(e){ toast(`打开失败：${e.message}`,true); }
     }
     function loadImage(src){ return new Promise((resolve,reject)=>{ const img=new Image(); img.onload=()=>resolve(img); img.onerror=reject; img.src=src; }); }
@@ -453,14 +464,14 @@
     $('#removeBtn').addEventListener('click',()=>{ state.cells[state.selected]=emptyCell(); render(); scheduleAutoSave(); });
     $('#saveBtn').addEventListener('click',()=>{ if(state.saveInFlight)return toast('正在自动保存，请稍候再试'); clearTimeout(state.autoSaveTimer); syncActivePage(); $('#draftName').value=els.projectName.value; els.saveModal.classList.add('open'); setTimeout(()=>$('#draftName').focus(),50); });
     $('#confirmSave').addEventListener('click',saveDraft); document.querySelectorAll('[data-close-save]').forEach(b=>b.addEventListener('click',()=>els.saveModal.classList.remove('open')));
-    $('#loadDraftBtn').addEventListener('click',listDrafts); $('#closeModal').addEventListener('click',()=>els.draftModal.classList.remove('open')); els.draftList.addEventListener('click',e=>{ const b=e.target.closest('[data-load]'); if(b) loadDraft(b.dataset.load); });
+    $('#loadDraftBtn').addEventListener('click',listDrafts); $('#closeModal').addEventListener('click',()=>els.draftModal.classList.remove('open')); els.draftList.addEventListener('click',e=>{ const remove=e.target.closest('[data-delete]'); if(remove)return deleteDraft(remove.dataset.delete,remove.dataset.name,remove); const open=e.target.closest('[data-load]'); if(open)loadDraft(open.dataset.load); });
     [els.draftModal,els.saveModal].forEach(m=>m.addEventListener('click',e=>{ if(e.target===m)m.classList.remove('open'); }));
     $('#exportBtn').addEventListener('click',exportCollage); $('#mobileExportBtn').addEventListener('click',exportCollage); $('#mobileClearBtn').addEventListener('click',()=>{ state.cells[state.selected]=emptyCell(); render(); scheduleAutoSave(); });
     $('#mobileSettingsBtn').addEventListener('click',()=>setMobileSettings(true)); $('#mobileSettingsClose').addEventListener('click',()=>setMobileSettings(false)); $('#mobileSettingsBackdrop').addEventListener('click',()=>setMobileSettings(false));
     window.addEventListener('resize',updatePreviewSize);
     document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='hidden'&&state.dirty)persistDraft(true); });
     document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ document.querySelectorAll('.modal.open').forEach(m=>m.classList.remove('open')); setMobileSettings(false); } });
-    const initialPage=createPage(1); state.pages=[initialPage]; state.activePageId=initialPage.id; state.cells=initialPage.cells; els.pageName.value=initialPage.name; els.pageDescription.value=''; fitCells(); render();
+    const initialPage=createPage(1); state.pages=[initialPage]; state.activePageId=initialPage.id; state.cells=initialPage.cells; els.pageName.value=initialPage.name; els.pageDescription.value=''; fitCells(); render(); markSavedBaseline();
   </script>
 </body>
 </html>

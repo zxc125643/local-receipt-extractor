@@ -37,7 +37,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def end_headers(self) -> None:
         self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.send_header("Cache-Control", "no-store")
         super().end_headers()
@@ -123,6 +123,22 @@ class Handler(BaseHTTPRequestHandler):
                 draft_id = cursor.lastrowid
             database.commit()
         return self.send_json(200, {"id": draft_id, "project_name": name, "updated_at": updated_at})
+
+    def do_DELETE(self) -> None:  # noqa: N802
+        path = urlparse(self.path).path.rstrip("/")
+        prefix = "/api/drafts/"
+        if not path.startswith(prefix):
+            return self.send_json(404, {"error": "接口不存在"})
+        try:
+            draft_id = int(unquote(path[len(prefix) :]))
+        except ValueError:
+            return self.send_json(400, {"error": "项目编号无效"})
+        with connect() as database:
+            cursor = database.execute("DELETE FROM drafts WHERE id = ?", (draft_id,))
+            database.commit()
+        if cursor.rowcount == 0:
+            return self.send_json(404, {"error": "项目不存在"})
+        return self.send_json(200, {"ok": True, "id": draft_id})
 
     def log_message(self, format: str, *args: object) -> None:
         print(f"[{self.log_date_time_string()}] {format % args}")
