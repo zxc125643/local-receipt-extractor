@@ -1,0 +1,17 @@
+services:
+  receipt-extractor:
+    build: .
+    container_name: receipt-extractor
+    restart: unless-stopped
+    ports:
+      - "8765:8765"
+    environment:
+      CORE_GATEWAY_HOST: "0.0.0.0"
+      CORE_GATEWAY_PORT: "8765"
+      CORE_GATEWAY_TOKEN: ${CORE_GATEWAY_TOKEN:?Set CORE_GATEWAY_TOKEN in .env before starting}
+      CORE_GATEWAY_DATA_DIR: /data
+    volumes:
+      - receipt-data:/data
+
+volumes:
+  receipt-data:

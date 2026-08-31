@@ -14,19 +14,34 @@ import type {
 import type { RuntimeConfig } from "../types/desktop";
 
 let cachedRuntimeConfig: Promise<RuntimeConfig> | null = null;
+const API_TOKEN_STORAGE_KEY = "core-gateway-api-token";
 
 async function getRuntimeConfig(): Promise<RuntimeConfig> {
   if (!cachedRuntimeConfig) {
     cachedRuntimeConfig = window.desktop?.getRuntimeConfig?.() ??
       Promise.resolve({
-        apiBaseUrl: import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8765",
-        apiToken: import.meta.env.VITE_API_TOKEN || "dev-token",
+        apiBaseUrl: import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? "http://127.0.0.1:8765" : window.location.origin),
+        apiToken: window.localStorage.getItem(API_TOKEN_STORAGE_KEY) || import.meta.env.VITE_API_TOKEN || "dev-token",
         apiPort: 8765,
         dataDir: ""
       });
   }
 
   return cachedRuntimeConfig;
+}
+
+export function getSavedApiToken() {
+  return window.localStorage.getItem(API_TOKEN_STORAGE_KEY) || "";
+}
+
+export function saveApiToken(token: string) {
+  const value = token.trim();
+  if (value) {
+    window.localStorage.setItem(API_TOKEN_STORAGE_KEY, value);
+  } else {
+    window.localStorage.removeItem(API_TOKEN_STORAGE_KEY);
+  }
+  cachedRuntimeConfig = null;
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -207,4 +222,61 @@ export function updateProxy(id: number, data: { is_enabled?: boolean }) {
 
 export function deleteProxy(id: number) {
   return request(`/proxy/${id}`, { method: "DELETE" });
+}
+
+type ReceiptProgress = { completed: number; total: number; currentFile: string; status: string };
+type ReceiptResult = { job_id: string; columns: string[]; rows: Array<Record<string, string>> };
+
+const wait = (milliseconds: number) => new Promise((resolve) => window.setTimeout(resolve, milliseconds));
+
+export async function processReceiptImages(payload: { columns: string[]; files: File[] }, onProgress?: (progress: ReceiptProgress) => void) {
+  const runtime = await getRuntimeConfig();
+  const formData = new FormData();
+  formData.append("columns", JSON.stringify(payload.columns));
+  payload.files.forEach((file) => formData.append("files", file, file.name));
+  const response = await fetch(`${runtime.apiBaseUrl}/receipts/process`, {
+    method: "POST",
+    headers: { "X-Desktop-Token": runtime.apiToken },
+    body: formData,
+  });
+  if (!response.ok) {
+    throw new Error(await response.text() || `识别失败（${response.status}）`);
+  }
+  const started = await response.json() as { job_id: string; completed: number; total: number; status: string };
+  onProgress?.({ completed: started.completed, total: started.total, currentFile: "", status: started.status });
+  while (true) {
+    await wait(350);
+    const statusResponse = await fetch(`${runtime.apiBaseUrl}/receipts/status/${started.job_id}`, {
+      headers: { "X-Desktop-Token": runtime.apiToken },
+    });
+    if (!statusResponse.ok) {
+      throw new Error(await statusResponse.text() || "无法读取识别进度。");
+    }
+    const status = await statusResponse.json() as { completed: number; total: number; current_file: string; status: string; error?: string } & Partial<ReceiptResult>;
+    onProgress?.({ completed: status.completed, total: status.total, currentFile: status.current_file, status: status.status });
+    if (status.status === "failed") {
+      throw new Error(status.error || "本地 OCR 识别失败。");
+    }
+    if (status.status === "completed") {
+      return { job_id: started.job_id, columns: status.columns || [], rows: status.rows || [] };
+    }
+  }
+}
+
+export async function downloadReceiptWorkbook(payload: { job_id: string; columns: string[]; rows: Array<Record<string, string>> }) {
+  const runtime = await getRuntimeConfig();
+  const response = await fetch(`${runtime.apiBaseUrl}/receipts/export`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Desktop-Token": runtime.apiToken },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    throw new Error(await response.text() || `导出失败（${response.status}）`);
+  }
+  const url = URL.createObjectURL(await response.blob());
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "截图提取结果.xlsx";
+  link.click();
+  URL.revokeObjectURL(url);
 }

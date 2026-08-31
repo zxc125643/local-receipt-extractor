@@ -10,3 +10,7 @@ python-multipart==0.0.12
 faker==22.0.0
 playwright==1.53.0
 patchright
+openpyxl==3.1.5
+rapidocr-onnxruntime==1.4.4
+pypdf==6.16.2
+PyMuPDF==1.28.2

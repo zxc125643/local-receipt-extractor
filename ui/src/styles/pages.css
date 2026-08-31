@@ -474,6 +474,23 @@
   /* 不设置 max-width，使用 .content-inner 的默认 max-width: var(--page-max-width) */
 }
 
+/* 截图提取 */
+.receipt-page { display: grid; gap: 16px; }
+.receipt-hero, .receipt-actions, .receipt-results .panel-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.receipt-hero h3 { margin: 0 0 4px; }
+.eyebrow { margin: 0 0 4px; color: var(--accent); font-size: .78rem; font-weight: 700; letter-spacing: .08em; }
+.receipt-token { min-width: 280px; }
+.receipt-form { display: grid; gap: 16px; }
+.receipt-columns { min-height: 88px; resize: vertical; }
+.receipt-actions { justify-content: flex-start; flex-wrap: wrap; }
+.receipt-actions .primary-button { margin-left: auto; }
+.receipt-results .panel-header { margin-bottom: 16px; }
+.receipt-progress { display: grid; gap: 9px; }
+.receipt-progress-heading { display: flex; justify-content: space-between; gap: 12px; }
+.receipt-progress-track { height: 10px; overflow: hidden; border-radius: 999px; background: var(--border-subtle); }
+.receipt-progress-track span { display: block; height: 100%; border-radius: inherit; background: var(--accent); transition: width 180ms ease-out; }
+@media (max-width: 720px) { .receipt-hero, .receipt-results .panel-header { align-items: stretch; flex-direction: column; } .receipt-token { min-width: 0; } .receipt-actions .primary-button { margin-left: 0; } }
+
 .register-tabs {
   display: flex;
   flex-direction: column;
