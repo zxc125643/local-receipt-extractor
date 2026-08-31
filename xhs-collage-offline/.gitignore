@@ -1,0 +1,11 @@
+node_modules/
+dist/
+drafts.db
+drafts.db-*
+assets/
+docker-data/
+__pycache__/
+*.pyc
+.test-data-*/
+.test-export-*
+.playwright-cli/

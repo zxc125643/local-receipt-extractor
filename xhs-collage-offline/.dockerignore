@@ -1,0 +1,8 @@
+node_modules
+dist
+docker-data
+drafts.db
+assets
+__pycache__
+.git
+.playwright-cli

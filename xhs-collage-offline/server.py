@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import json
+import hashlib
+import mimetypes
+import os
 import sqlite3
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -11,14 +14,55 @@ from urllib.parse import unquote, urlparse
 
 
 ROOT = Path(__file__).resolve().parent
-DB_PATH = ROOT / "drafts.db"
+DATA_DIR = Path(os.environ.get("XHS_DATA_DIR", ROOT)).resolve()
+DB_PATH = DATA_DIR / "drafts.db"
+ASSET_DIR = DATA_DIR / "assets"
 HOST = "0.0.0.0"
-PORT = 8766
+PORT = int(os.environ.get("XHS_API_PORT", "8766"))
+MAX_ASSET_BYTES = 50 * 1024 * 1024
+
+
+def safe_image_extension(filename: str, content_type: str) -> str:
+    if not content_type.lower().startswith("image/"):
+        raise ValueError("只允许上传图片")
+    known = {
+        "image/jpeg": ".jpg",
+        "image/png": ".png",
+        "image/webp": ".webp",
+        "image/gif": ".gif",
+        "image/avif": ".avif",
+        "image/heic": ".heic",
+        "image/heif": ".heif",
+    }
+    return known.get(content_type.lower()) or Path(filename).suffix.lower() or ".img"
+
+
+def store_asset(data: bytes, filename: str, content_type: str, directory: Path = ASSET_DIR) -> dict[str, str]:
+    if not data:
+        raise ValueError("图片内容为空")
+    if len(data) > MAX_ASSET_BYTES:
+        raise ValueError("单张图片不能超过 50MB")
+    extension = safe_image_extension(filename, content_type)
+    asset_id = hashlib.sha256(data).hexdigest()
+    directory.mkdir(parents=True, exist_ok=True)
+    target = directory / f"{asset_id}{extension}"
+    if not target.exists():
+        temporary = target.with_suffix(f"{target.suffix}.tmp")
+        temporary.write_bytes(data)
+        temporary.replace(target)
+    return {
+        "id": asset_id,
+        "name": filename or target.name,
+        "src": f"/assets/{target.name}",
+        "mimeType": content_type,
+    }
 
 
 def connect() -> sqlite3.Connection:
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
     connection = sqlite3.connect(DB_PATH)
     connection.row_factory = sqlite3.Row
+    connection.execute("PRAGMA journal_mode=WAL")
     connection.execute(
         """
         CREATE TABLE IF NOT EXISTS drafts (
@@ -38,8 +82,9 @@ class Handler(BaseHTTPRequestHandler):
     def end_headers(self) -> None:
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
-        self.send_header("Cache-Control", "no-store")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Filename")
+        if not urlparse(self.path).path.startswith("/assets/"):
+            self.send_header("Cache-Control", "no-store")
         super().end_headers()
 
     def send_json(self, status: int, payload: object) -> None:
@@ -89,10 +134,39 @@ class Handler(BaseHTTPRequestHandler):
             payload = json.loads(row["payload"])
             payload["id"] = draft_id
             return self.send_json(200, payload)
+        asset_prefix = "/assets/"
+        if path.startswith(asset_prefix):
+            filename = Path(unquote(path[len(asset_prefix) :])).name
+            target = ASSET_DIR / filename
+            if not filename or not target.is_file():
+                return self.send_json(404, {"error": "素材不存在"})
+            body = target.read_bytes()
+            self.send_response(200)
+            self.send_header("Content-Type", mimetypes.guess_type(target.name)[0] or "application/octet-stream")
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Cache-Control", "public, max-age=31536000, immutable")
+            self.end_headers()
+            self.wfile.write(body)
+            return
         return self.send_json(404, {"error": "接口不存在"})
 
     def do_POST(self) -> None:  # noqa: N802
-        if urlparse(self.path).path.rstrip("/") != "/api/drafts":
+        path = urlparse(self.path).path.rstrip("/")
+        if path == "/api/assets":
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                if length > MAX_ASSET_BYTES:
+                    return self.send_json(413, {"error": "单张图片不能超过 50MB"})
+                filename = unquote(self.headers.get("X-Filename", "image"))[:255]
+                asset = store_asset(
+                    self.rfile.read(length),
+                    filename,
+                    self.headers.get("Content-Type", "application/octet-stream").split(";", 1)[0],
+                )
+            except (ValueError, OSError) as error:
+                return self.send_json(400, {"error": str(error)})
+            return self.send_json(201, asset)
+        if path != "/api/drafts":
             return self.send_json(404, {"error": "接口不存在"})
         try:
             length = int(self.headers.get("Content-Length", "0"))
