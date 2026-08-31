@@ -7,6 +7,7 @@ type TaggedObject = FabricObject & { data?: { role: ObjectRole; slotId: string }
 
 export interface PosterCanvasEvents {
   onSelectSlot: (slotId: string) => void
+  onEditImage: (slotId: string) => void
   onImageChange: (slotId: string, change: Pick<PosterSlot, 'cropX' | 'cropY' | 'zoom'>) => void
 }
 
@@ -26,6 +27,10 @@ export class PosterCanvas {
     this.canvas.on('mouse:down', ({ target }) => {
       const tagged = target as TaggedObject | undefined
       if (tagged?.data?.slotId) this.events.onSelectSlot(tagged.data.slotId)
+    })
+    this.canvas.on('mouse:dblclick', ({ target }) => {
+      const tagged = target as TaggedObject | undefined
+      if (tagged?.data?.role === 'image' && tagged.data.slotId) this.events.onEditImage(tagged.data.slotId)
     })
     this.canvas.on('selection:created', ({ selected }) => this.emitSelection(selected?.[0]))
     this.canvas.on('selection:updated', ({ selected }) => this.emitSelection(selected?.[0]))

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createPage, getTemplateLayout, normalizeLegacyDraft } from '../src/editor/template'
+import { clampCrop, createPage, getTemplateLayout, moveCrop, normalizeLegacyDraft } from '../src/editor/template'
 
 describe('tutorial poster template', () => {
   it('creates one 2:3 poster with six editable slots', () => {
@@ -65,5 +65,12 @@ describe('tutorial poster template', () => {
       cropY: 0.8,
       zoom: 1.45,
     })
+  })
+
+  it('converts direct image dragging into bounded crop positions', () => {
+    expect(moveCrop(0.5, 40, 200)).toBeCloseTo(0.3)
+    expect(moveCrop(0.1, 80, 200)).toBe(0)
+    expect(moveCrop(0.9, -80, 200)).toBe(1)
+    expect(clampCrop(Number.NaN)).toBe(0.5)
   })
 })

@@ -11,6 +11,16 @@ function makeId(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 }
 
+export function clampCrop(value: number): number {
+  if (!Number.isFinite(value)) return 0.5
+  return Math.max(0, Math.min(1, value))
+}
+
+export function moveCrop(start: number, dragPixels: number, overflowPixels: number): number {
+  if (overflowPixels <= 0) return 0.5
+  return clampCrop(start - dragPixels / overflowPixels)
+}
+
 export function createSlot(index: number, source: Partial<PosterSlot> = {}): PosterSlot {
   return {
     id: source.id || `slot-${index + 1}`,
