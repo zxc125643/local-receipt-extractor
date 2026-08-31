@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { PosterCanvas } from './editor/posterCanvas'
-import { createPage, createProject, createSlot, getTemplateLayout, moveCrop, STYLE_PRESETS } from './editor/template'
-import { deleteDraft, listDrafts, loadDraft, migrateDataUrlAsset, saveDraft } from './services/api'
+import { createPage, createProject, createSlot, STYLE_PRESETS } from './editor/template'
+import { deleteDraft, listDrafts, loadDraft, migrateDataUrlAsset, renderPage, saveDraft } from './services/api'
 import { processAndUploadImage } from './services/imagePipeline'
 import type { Asset, PosterStyle, Project } from './types'
 
@@ -23,8 +23,10 @@ const importProgress = ref('')
 const showProjects = ref(false)
 const showSettings = ref(false)
 const showInspector = ref(false)
-const showCropEditor = ref(false)
-const cropNatural = ref({ width: 1, height: 1 })
+const cropMode = ref(false)
+const showAdvancedStyle = ref(false)
+const canUndo = ref(false)
+const canRedo = ref(false)
 const draftItems = ref<Awaited<ReturnType<typeof listDrafts>>>([])
 const draftLoading = ref(false)
 const toastText = ref('')
@@ -34,32 +36,36 @@ let saveTimer: ReturnType<typeof setTimeout> | undefined
 let renderFrame = 0
 let resizeObserver: ResizeObserver | undefined
 let editor: PosterCanvas | undefined
+let historyCurrent = JSON.stringify(project.value)
+let historyTimer: ReturnType<typeof setTimeout> | undefined
+let historyGroupOpen = false
+const undoStack: string[] = []
+const redoStack: string[] = []
 
 const activePage = computed(() => project.value.pages.find((page) => page.id === project.value.activePageId) || project.value.pages[0])
 const selectedSlot = computed(() => activePage.value.slots.find((slot) => slot.id === selectedSlotId.value) || activePage.value.slots[0])
 const styleEntries = Object.entries(STYLE_PRESETS)
 const placedCount = computed(() => activePage.value.slots.filter((slot) => slot.src).length)
-const cropAspect = computed(() => {
-  const slotIndex = Math.max(0, activePage.value.slots.indexOf(selectedSlot.value))
-  const box = getTemplateLayout(activePage.value).slots[slotIndex]
-  return box ? box.width / box.imageHeight : 1
-})
-const cropRatios = computed(() => {
-  const naturalAspect = cropNatural.value.width / Math.max(1, cropNatural.value.height)
-  const viewportAspect = cropAspect.value
-  const zoom = Math.max(1, selectedSlot.value?.zoom || 1)
-  if (naturalAspect >= viewportAspect) {
-    return { width: zoom * naturalAspect / viewportAspect, height: zoom }
-  }
-  return { width: zoom, height: zoom * viewportAspect / naturalAspect }
-})
-const cropImageStyle = computed(() => ({
-  width: `${cropRatios.value.width * 100}%`,
-  height: `${cropRatios.value.height * 100}%`,
-  left: `${-(cropRatios.value.width - 1) * (selectedSlot.value?.cropX ?? 0.5) * 100}%`,
-  top: `${-(cropRatios.value.height - 1) * (selectedSlot.value?.cropY ?? 0.5) * 100}%`,
-}))
-let cropDrag: { pointerId: number; x: number; y: number; cropX: number; cropY: number } | null = null
+
+function updateHistoryButtons() {
+  canUndo.value = undoStack.length > 0
+  canRedo.value = redoStack.length > 0
+}
+
+function closeHistoryGroup() {
+  clearTimeout(historyTimer)
+  historyCurrent = JSON.stringify(project.value)
+  historyGroupOpen = false
+  updateHistoryButtons()
+}
+
+function resetHistory() {
+  undoStack.length = 0
+  redoStack.length = 0
+  historyCurrent = JSON.stringify(project.value)
+  historyGroupOpen = false
+  updateHistoryButtons()
+}
 
 function toast(message: string, error = false) {
   toastText.value = message
@@ -74,12 +80,51 @@ function queueRender() {
 }
 
 function markDirty() {
+  if (!historyGroupOpen) {
+    undoStack.push(historyCurrent)
+    if (undoStack.length > 40) undoStack.shift()
+    redoStack.length = 0
+    historyGroupOpen = true
+  }
+  clearTimeout(historyTimer)
+  historyTimer = setTimeout(closeHistoryGroup, 550)
+  updateHistoryButtons()
   dirty.value = true
   revision.value += 1
   saveKind.value = 'normal'
   saveState.value = '有未保存修改'
   clearTimeout(saveTimer)
   saveTimer = setTimeout(() => persist(true), 1600)
+}
+
+function restoreSnapshot(snapshot: string) {
+  project.value = JSON.parse(snapshot) as Project
+  selectedSlotId.value = activePage.value.slots[0].id
+  dirty.value = true
+  revision.value += 1
+  saveState.value = '有未保存修改'
+  saveKind.value = 'normal'
+  queueRender()
+  clearTimeout(saveTimer)
+  saveTimer = setTimeout(() => persist(true), 1200)
+}
+
+function undo() {
+  if (!undoStack.length) return
+  closeHistoryGroup()
+  redoStack.push(JSON.stringify(project.value))
+  restoreSnapshot(undoStack.pop()!)
+  historyCurrent = JSON.stringify(project.value)
+  updateHistoryButtons()
+}
+
+function redo() {
+  if (!redoStack.length) return
+  closeHistoryGroup()
+  undoStack.push(JSON.stringify(project.value))
+  restoreSnapshot(redoStack.pop()!)
+  historyCurrent = JSON.stringify(project.value)
+  updateHistoryButtons()
 }
 
 function updateVisual() {
@@ -197,57 +242,12 @@ function openCropEditor(slotId = selectedSlotId.value) {
   const slot = activePage.value.slots.find((item) => item.id === slotId)
   if (!slot?.src) return toast('请先给这个格子放入图片', true)
   selectedSlotId.value = slot.id
-  const asset = project.value.assets.find((item) => item.id === slot.assetId)
-  cropNatural.value = { width: asset?.width || 1, height: asset?.height || 1 }
   showInspector.value = false
-  showCropEditor.value = true
+  if (!editor?.enterCrop(slot.id)) toast('裁切工具正在切换，请再试一次', true)
 }
 
-function closeCropEditor() {
-  cropDrag = null
-  showCropEditor.value = false
-  queueRender()
-}
-
-function cropImageLoaded(event: Event) {
-  const image = event.currentTarget as HTMLImageElement
-  cropNatural.value = { width: image.naturalWidth || 1, height: image.naturalHeight || 1 }
-}
-
-function cropPointerDown(event: PointerEvent) {
-  if (!selectedSlot.value?.src) return
-  cropDrag = {
-    pointerId: event.pointerId,
-    x: event.clientX,
-    y: event.clientY,
-    cropX: selectedSlot.value.cropX ?? 0.5,
-    cropY: selectedSlot.value.cropY ?? 0.5,
-  }
-  ;(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId)
-}
-
-function cropPointerMove(event: PointerEvent) {
-  if (!cropDrag || cropDrag.pointerId !== event.pointerId) return
-  const target = event.currentTarget as HTMLElement
-  const rect = target.getBoundingClientRect()
-  selectedSlot.value.cropX = moveCrop(cropDrag.cropX, event.clientX - cropDrag.x, (cropRatios.value.width - 1) * rect.width)
-  selectedSlot.value.cropY = moveCrop(cropDrag.cropY, event.clientY - cropDrag.y, (cropRatios.value.height - 1) * rect.height)
-}
-
-function cropPointerUp(event: PointerEvent) {
-  if (!cropDrag || cropDrag.pointerId !== event.pointerId) return
-  cropDrag = null
-  markDirty()
-  queueRender()
-}
-
-function setCropZoom(value: number) {
-  selectedSlot.value.zoom = Math.max(1, Math.min(3, Number(value) || 1))
-  markDirty()
-}
-
-function cropWheel(event: WheelEvent) {
-  setCropZoom((selectedSlot.value.zoom || 1) + (event.deltaY < 0 ? 0.08 : -0.08))
+function finishCrop(commit = true) {
+  editor?.finishCrop(commit)
 }
 
 function onImageChange(slotId: string, change: { cropX?: number; cropY?: number; zoom?: number }) {
@@ -272,13 +272,19 @@ function clearSelected() {
   updateVisual()
 }
 
-function resetCrop() {
+async function resetCrop() {
   const slot = selectedSlot.value
   if (!slot?.src) return
+  const reopen = cropMode.value
+  if (reopen) editor?.finishCrop(false)
   slot.cropX = 0.5
   slot.cropY = 0.5
   slot.zoom = 1
-  updateVisual()
+  if (!reopen) return updateVisual()
+  markDirty()
+  await nextTick()
+  await editor?.render(activePage.value, slot.id)
+  editor?.enterCrop(slot.id)
 }
 
 function switchPage(pageId: string) {
@@ -312,8 +318,9 @@ function applyGrid(columns: number, rows: number) {
 }
 
 function applyStyle(style: PosterStyle) {
-  activePage.value.style = { ...style }
+  project.value.pages.forEach((page) => { page.style = { ...style } })
   updateVisual()
+  toast('已将风格应用到全部图片页')
 }
 
 function applyStyleToAllPages() {
@@ -324,7 +331,6 @@ function applyStyleToAllPages() {
     page.tone = tone
   })
   updateVisual()
-  toast(`已将当前风格应用到全部 ${project.value.pages.length} 张图片`)
 }
 
 async function downloadPoster() {
@@ -332,12 +338,15 @@ async function downloadPoster() {
   if (!editor || exporting.value) return
   exporting.value = true
   try {
-    const dataUrl = await editor.exportPng(activePage.value)
+    editor.finishCrop(true)
+    const blob = await renderPage(project.value, activePage.value)
+    const dataUrl = URL.createObjectURL(blob)
     const anchor = document.createElement('a')
     anchor.href = dataUrl
     anchor.download = `${activePage.value.name.replace(/[\\/:*?"<>|]/g, '_')}_1080x1620.png`
     anchor.click()
-    toast('已使用原图导出1080×1620高清PNG')
+    setTimeout(() => URL.revokeObjectURL(dataUrl), 1000)
+    toast('已由原图渲染器导出1080×1620高清PNG')
   } catch (error) {
     toast(error instanceof Error ? error.message : '图片导出失败', true)
   } finally {
@@ -367,6 +376,7 @@ async function openDraft(id: number) {
     saveState.value = '✓ 已从后台恢复'
     showProjects.value = false
     await nextTick()
+    resetHistory()
     queueRender()
     toast(`已打开“${project.value.projectName}”`)
   } catch (error) {
@@ -384,6 +394,7 @@ async function removeDraft(id: number, name: string) {
       dirty.value = false
       saveState.value = '当前为新项目'
       queueRender()
+      resetHistory()
     }
     draftItems.value = await listDrafts()
     toast(`已删除项目“${name}”`)
@@ -399,12 +410,17 @@ function newProject() {
   dirty.value = false
   saveState.value = '尚未修改'
   showProjects.value = false
+  resetHistory()
   queueRender()
 }
 
 onMounted(() => {
   if (!canvasElement.value) return
-  editor = new PosterCanvas(canvasElement.value, { onSelectSlot, onEditImage: openCropEditor, onImageChange })
+  editor = new PosterCanvas(canvasElement.value, {
+    onSelectSlot,
+    onImageChange,
+    onCropModeChange: (active) => { cropMode.value = active },
+  })
   queueRender()
   if (canvasHost.value) {
     resizeObserver = new ResizeObserver(([entry]) => editor?.fit(entry.contentRect.width - 32))
@@ -415,6 +431,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   clearTimeout(saveTimer)
   clearTimeout(toastTimer)
+  clearTimeout(historyTimer)
   cancelAnimationFrame(renderFrame)
   resizeObserver?.disconnect()
   editor?.dispose()
@@ -422,11 +439,13 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="app-shell">
+  <div class="app-shell" :class="{ 'crop-mode': cropMode }">
     <header class="topbar">
       <div class="brand"><span class="brand-icon"><i /><i /><i /><i /></span><div><strong>方格志 <em>V2</em></strong><small>离线海报画布</small></div></div>
       <div class="top-actions">
         <span class="save-state" :class="saveKind">{{ saveState }}</span>
+        <button class="button subtle history-button" :disabled="!canUndo" title="撤销" @click="undo">↶</button>
+        <button class="button subtle history-button" :disabled="!canRedo" title="重做" @click="redo">↷</button>
         <button class="button subtle" @click="openProjectLibrary">项目库</button>
         <button class="button" :disabled="saving" @click="persist(false)">{{ saving ? '保存中…' : '保存' }}</button>
         <button class="button primary" :disabled="exporting" @click="downloadPoster">{{ exporting ? '生成中…' : '导出图片' }}</button>
@@ -461,26 +480,27 @@ onBeforeUnmount(() => {
           </div>
         </section>
         <section class="panel-section">
-          <div class="section-heading"><b>样式模板</b><span>当前图片</span></div>
+          <div class="section-heading"><b>整套风格</b><span>默认应用全部图片页</span></div>
           <div class="style-presets">
             <button v-for="([id, style]) in styleEntries" :key="id" :class="{ active: activePage.style.accent === style.accent }" @click="applyStyle(style)"><span :style="{ background: style.background }"><i :style="{ background: style.accent }" /><i :style="{ background: style.panel }" /></span>{{ { amber: '暖橙教程', red: '小红书红', cream: '奶油杂志', ink: '深色质感' }[id] }}</button>
           </div>
-          <label>全页图片统一色调<select v-model="activePage.tone" @change="updateVisual"><option value="original">自然原色</option><option value="warm">暖色统一</option><option value="cool">清冷统一</option><option value="bright">明亮清透</option><option value="film">柔和胶片</option></select></label>
-          <div class="manual-style">
+          <label>全项目图片统一色调<select v-model="activePage.tone" @change="applyStyleToAllPages"><option value="original">自然原色</option><option value="warm">暖色统一</option><option value="cool">清冷统一</option><option value="bright">明亮清透</option><option value="film">柔和胶片</option></select></label>
+          <button class="advanced-toggle" @click="showAdvancedStyle = !showAdvancedStyle">{{ showAdvancedStyle ? '收起高级样式' : '高级样式（颜色、圆角、间距）' }}</button>
+          <div v-if="showAdvancedStyle" class="manual-style">
             <b>手动设计当前风格</b>
             <div class="color-controls">
-              <label>画布背景<input v-model="activePage.style.background" type="color" @input="updateVisual"></label>
-              <label>主色/边框<input v-model="activePage.style.accent" type="color" @input="updateVisual"></label>
-              <label>备注底色<input v-model="activePage.style.panel" type="color" @input="updateVisual"></label>
-              <label>备注文字<input v-model="activePage.style.text" type="color" @input="updateVisual"></label>
-              <label>标题文字<input v-model="activePage.style.titleFill" type="color" @input="updateVisual"></label>
-              <label>标题描边<input v-model="activePage.style.titleStroke" type="color" @input="updateVisual"></label>
+              <label>画布背景<input v-model="activePage.style.background" type="color" @input="applyStyleToAllPages"></label>
+              <label>主色/边框<input v-model="activePage.style.accent" type="color" @input="applyStyleToAllPages"></label>
+              <label>备注底色<input v-model="activePage.style.panel" type="color" @input="applyStyleToAllPages"></label>
+              <label>备注文字<input v-model="activePage.style.text" type="color" @input="applyStyleToAllPages"></label>
+              <label>标题文字<input v-model="activePage.style.titleFill" type="color" @input="applyStyleToAllPages"></label>
+              <label>标题描边<input v-model="activePage.style.titleStroke" type="color" @input="applyStyleToAllPages"></label>
             </div>
             <div class="style-ranges">
-              <label>圆角 <output>{{ activePage.style.radius }}</output><input v-model.number="activePage.style.radius" type="range" min="0" max="48" step="1" @input="updateVisual"></label>
-              <label>格子间距 <output>{{ activePage.style.gap }}</output><input v-model.number="activePage.style.gap" type="range" min="0" max="30" step="1" @input="updateVisual"></label>
+              <label>圆角 <output>{{ activePage.style.radius }}</output><input v-model.number="activePage.style.radius" type="range" min="0" max="48" step="1" @input="applyStyleToAllPages"></label>
+              <label>格子间距 <output>{{ activePage.style.gap }}</output><input v-model.number="activePage.style.gap" type="range" min="0" max="30" step="1" @input="applyStyleToAllPages"></label>
             </div>
-            <button class="button apply-all" @click="applyStyleToAllPages">应用当前风格到全部图片页</button>
+            <button class="button apply-all" @click="applyStyleToAllPages">确认应用到全部图片页</button>
           </div>
         </section>
       </aside>
@@ -500,8 +520,9 @@ onBeforeUnmount(() => {
           <p v-if="importing || importProgress" class="import-progress">{{ importing ? importProgress : importProgress }}</p>
         </section>
 
-        <div class="stage-heading"><div><b>{{ activePage.name }}</b><span>单击选择，双击图片打开大尺寸手动裁切</span></div><div class="stage-actions"><button class="mini-button" :disabled="!selectedSlot?.src" @click="openCropEditor()">✂ 手动裁切</button><em>{{ placedCount }} / {{ activePage.slots.length }} 已放置</em></div></div>
+        <div class="stage-heading"><div><b>{{ activePage.name }}</b><span>{{ cropMode ? '拖动图片定位；拖动四角缩放图片' : '单击选择格子，双击图片直接裁切' }}</span></div><div class="stage-actions"><button class="mini-button" :disabled="!selectedSlot?.src || cropMode" @click="openCropEditor()">✂ 裁切图片</button><em>{{ placedCount }} / {{ activePage.slots.length }} 已放置</em></div></div>
         <div ref="canvasHost" class="canvas-host"><canvas ref="canvasElement" /></div>
+        <div v-if="cropMode" class="crop-actionbar"><button class="button" @click="finishCrop(false)">取消</button><button class="button" @click="resetCrop">恢复居中</button><button class="button primary" @click="finishCrop(true)">完成裁切</button></div>
       </section>
 
       <aside class="inspector-panel" :class="{ open: showInspector }">
@@ -510,19 +531,17 @@ onBeforeUnmount(() => {
           <div class="section-heading"><b>第 {{ activePage.slots.indexOf(selectedSlot) + 1 }} 格</b><span>{{ selectedSlot?.src ? '已放置图片' : '等待图片' }}</span></div>
           <div class="selected-preview" :class="{ empty: !selectedSlot?.src }"><img v-if="selectedSlot?.src" :src="selectedSlot.src" alt="当前格预览"><span v-else>点击素材即可放入</span></div>
           <div v-if="selectedSlot?.src" class="crop-sliders">
-            <button class="button crop-open" @click="openCropEditor()">✂ 打开大尺寸手动裁切</button>
-            <label>图片缩放 <output>{{ Math.round((selectedSlot.zoom || 1) * 100) }}%</output><input v-model.number="selectedSlot.zoom" type="range" min="1" max="3" step="0.05" @input="updateVisual"></label>
-            <label>水平裁切 <output>{{ Math.round((selectedSlot.cropX ?? .5) * 100) }}%</output><input v-model.number="selectedSlot.cropX" type="range" min="0" max="1" step="0.01" @input="updateVisual"></label>
-            <label>垂直裁切 <output>{{ Math.round((selectedSlot.cropY ?? .5) * 100) }}%</output><input v-model.number="selectedSlot.cropY" type="range" min="0" max="1" step="0.01" @input="updateVisual"></label>
+            <button class="button crop-open" @click="openCropEditor()">✂ 在画布中直接裁切</button>
           </div>
           <label>步骤说明<textarea v-model="selectedSlot.note" maxlength="240" rows="5" placeholder="可输入多行，导出时自动换行" @input="updateVisual" /></label>
           <div class="inspector-actions"><button class="button" :disabled="!selectedSlot?.src" @click="resetCrop">恢复居中</button><button class="button danger" :disabled="!selectedSlot?.src" @click="clearSelected">清空格子</button></div>
         </section>
-        <section class="help-card"><b>画布操作</b><p>先点击目标格，再点击上方素材。选中图片后可直接拖动位置，拖动四角等比缩放；手机支持触摸操作。所有图层数据会随项目保存。</p></section>
+        <section class="help-card"><b>画布操作</b><p>先点格子，再点素材。双击图片进入裁切：拖动图片调整位置，拖动四角缩放；点“完成裁切”后自动保存。</p></section>
       </aside>
     </main>
 
-    <nav class="mobile-bar">
+    <nav v-if="!cropMode" class="mobile-bar">
+      <button :disabled="!canUndo" @click="undo"><i>↶</i><span>撤销</span></button>
       <button @click="showSettings = true"><i>☰</i><span>设置</span></button>
       <button @click="fileInput?.click()"><i>＋</i><span>素材</span></button>
       <button @click="showInspector = true"><i>✎</i><span>格子</span></button>
@@ -538,28 +557,6 @@ onBeforeUnmount(() => {
         <div v-else-if="!draftItems.length" class="modal-empty">还没有保存过的项目</div>
         <div v-else class="draft-list">
           <article v-for="item in draftItems" :key="item.id"><div><b>{{ item.project_name }}</b><span>{{ item.page_count }}张图片 · {{ item.asset_count || 0 }}张素材 · {{ new Date(item.updated_at).toLocaleString() }}</span></div><button class="button small" @click="openDraft(item.id)">打开</button><button class="button small danger" @click="removeDraft(item.id, item.project_name)">删除</button></article>
-        </div>
-      </div>
-    </div>
-    <div v-if="showCropEditor" class="crop-modal" @click.self="closeCropEditor">
-      <div class="crop-dialog">
-        <div class="modal-heading"><div><b>手动调整图片</b><span>直接拖动图片改变裁切区域，滚轮或滑杆控制大小</span></div><button class="icon-button" @click="closeCropEditor">×</button></div>
-        <div
-          class="crop-viewport"
-          :style="{ aspectRatio: String(cropAspect) }"
-          @pointerdown="cropPointerDown"
-          @pointermove="cropPointerMove"
-          @pointerup="cropPointerUp"
-          @pointercancel="cropPointerUp"
-          @wheel.prevent="cropWheel"
-        >
-          <img v-if="selectedSlot?.src" :src="selectedSlot.src" :style="cropImageStyle" draggable="false" alt="手动裁切预览" @load="cropImageLoaded">
-          <span class="crop-guide horizontal" /><span class="crop-guide vertical" />
-          <span class="crop-hint">按住图片拖动</span>
-        </div>
-        <div class="crop-controls">
-          <label>图片大小 <output>{{ Math.round((selectedSlot.zoom || 1) * 100) }}%</output><input :value="selectedSlot.zoom || 1" type="range" min="1" max="3" step="0.01" @input="setCropZoom(Number(($event.target as HTMLInputElement).value))"></label>
-          <div><button class="button" @click="resetCrop">恢复居中</button><button class="button primary" @click="closeCropEditor">完成裁切</button></div>
         </div>
       </div>
     </div>

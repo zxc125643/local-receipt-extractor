@@ -1,4 +1,4 @@
-import type { Asset, Project } from '../types'
+import type { Asset, PosterPage, Project } from '../types'
 import { normalizeLegacyDraft } from '../editor/template'
 
 interface DraftSummary {
@@ -69,6 +69,25 @@ export async function loadDraft(id: number): Promise<Project> {
 
 export async function deleteDraft(id: number): Promise<void> {
   await request(`/api/drafts/${id}`, { method: 'DELETE' })
+}
+
+export async function renderPage(project: Project, page: PosterPage): Promise<Blob> {
+  const response = await fetch('/api/render', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ projectName: project.projectName, page }),
+  })
+  if (!response.ok) {
+    let message = `原图渲染失败（${response.status}）`
+    try {
+      const error = await response.json() as { error?: string }
+      if (error.error) message = error.error
+    } catch {
+      // Keep the HTTP fallback message.
+    }
+    throw new Error(message)
+  }
+  return response.blob()
 }
 
 export async function migrateDataUrlAsset(asset: Asset): Promise<Asset> {

@@ -1,4 +1,5 @@
 import { Canvas, Circle, FabricImage, FabricObject, FabricText, Gradient, Rect, Textbox, filters } from 'fabric'
+import { enterCropMode } from 'fabric/extensions'
 import { getTemplateLayout } from './template'
 import type { PosterPage, PosterSlot } from '../types'
 
@@ -7,14 +8,16 @@ type TaggedObject = FabricObject & { data?: { role: ObjectRole; slotId: string }
 
 export interface PosterCanvasEvents {
   onSelectSlot: (slotId: string) => void
-  onEditImage: (slotId: string) => void
   onImageChange: (slotId: string, change: Pick<PosterSlot, 'cropX' | 'cropY' | 'zoom'>) => void
+  onCropModeChange: (active: boolean) => void
 }
 
 export class PosterCanvas {
   private canvas: Canvas
   private page: PosterPage | null = null
   private renderVersion = 0
+  private croppingSlotId: string | null = null
+  private cropBackup: Pick<PosterSlot, 'cropX' | 'cropY' | 'zoom'> | null = null
 
   constructor(element: HTMLCanvasElement, private events: PosterCanvasEvents) {
     this.canvas = new Canvas(element, {
@@ -30,13 +33,13 @@ export class PosterCanvas {
     })
     this.canvas.on('mouse:dblclick', ({ target }) => {
       const tagged = target as TaggedObject | undefined
-      if (tagged?.data?.role === 'image' && tagged.data.slotId) this.events.onEditImage(tagged.data.slotId)
+      if (tagged?.data?.role === 'image' && tagged.data.slotId && !this.croppingSlotId) this.enterCrop(tagged.data.slotId)
     })
     this.canvas.on('selection:created', ({ selected }) => this.emitSelection(selected?.[0]))
     this.canvas.on('selection:updated', ({ selected }) => this.emitSelection(selected?.[0]))
-    this.canvas.on('object:moving', ({ target }) => this.constrainImage(target))
-    this.canvas.on('object:scaling', ({ target }) => this.constrainImage(target))
-    this.canvas.on('object:modified', ({ target }) => this.emitImageChange(target))
+    this.canvas.on('object:modified', ({ target }) => {
+      if (!this.croppingSlotId) this.emitImageChange(target)
+    })
   }
 
   private emitSelection(target?: FabricObject) {
@@ -47,38 +50,61 @@ export class PosterCanvas {
   private emitImageChange(target?: FabricObject) {
     const tagged = target as TaggedObject | undefined
     if (tagged?.data?.role !== 'image' || !tagged.data.slotId || !this.page) return
-    this.constrainImage(target)
     const index = this.page.slots.findIndex((slot) => slot.id === tagged.data?.slotId)
     if (index < 0) return
     const box = getTemplateLayout(this.page).slots[index]
-    const width = (target?.width || 1) * (target?.scaleX || 1)
-    const height = (target?.height || 1) * (target?.scaleY || 1)
-    const coverScale = Math.max(box.width / (target?.width || 1), box.imageHeight / (target?.height || 1))
+    const image = target as FabricImage
+    const element = image.getElement() as HTMLImageElement
+    const naturalWidth = element.naturalWidth || image.width || 1
+    const naturalHeight = element.naturalHeight || image.height || 1
+    const baseCropWidth = Math.min(naturalWidth, naturalHeight * box.width / box.imageHeight)
+    const baseCropHeight = Math.min(naturalHeight, naturalWidth * box.imageHeight / box.width)
     this.events.onImageChange(tagged.data.slotId, {
-      cropX: Math.max(0, Math.min(1, (box.x - (target?.left ?? box.x)) / Math.max(1, width - box.width))),
-      cropY: Math.max(0, Math.min(1, (box.y - (target?.top ?? box.y)) / Math.max(1, height - box.imageHeight))),
-      zoom: Math.max(1, (target?.scaleX || coverScale) / coverScale),
+      cropX: Math.max(0, Math.min(1, image.cropX / Math.max(1, naturalWidth - image.width))),
+      cropY: Math.max(0, Math.min(1, image.cropY / Math.max(1, naturalHeight - image.height))),
+      zoom: Math.max(1, Math.min(3, Math.max(baseCropWidth / image.width, baseCropHeight / image.height))),
     })
   }
 
-  private constrainImage(target?: FabricObject) {
-    const tagged = target as TaggedObject | undefined
-    if (tagged?.data?.role !== 'image' || !this.page) return
-    const index = this.page.slots.findIndex((slot) => slot.id === tagged.data?.slotId)
-    if (index < 0) return
-    const box = getTemplateLayout(this.page).slots[index]
-    const coverScale = Math.max(box.width / (target?.width || 1), box.imageHeight / (target?.height || 1))
-    const scale = Math.max(coverScale, target?.scaleX || coverScale, target?.scaleY || coverScale)
-    target?.set({ scaleX: scale, scaleY: scale })
-    const width = (target?.width || 1) * scale
-    const height = (target?.height || 1) * scale
-    target?.set({
-      left: Math.max(box.x + box.width - width, Math.min(box.x, target.left ?? box.x)),
-      top: Math.max(box.y + box.imageHeight - height, Math.min(box.y, target.top ?? box.y)),
-    })
+  enterCrop(slotId?: string) {
+    const id = slotId || (this.canvas.getActiveObject() as TaggedObject | undefined)?.data?.slotId
+    if (!id || this.croppingSlotId) return false
+    const image = this.canvas.getObjects().find((object) => {
+      const tagged = object as TaggedObject
+      return tagged.data?.role === 'image' && tagged.data.slotId === id
+    }) as FabricImage | undefined
+    const slot = this.page?.slots.find((item) => item.id === id)
+    if (!image || !slot) return false
+    this.croppingSlotId = id
+    this.cropBackup = { cropX: slot.cropX, cropY: slot.cropY, zoom: slot.zoom }
+    image.set({ lockMovementX: false, lockMovementY: false, hoverCursor: 'move' })
+    enterCropMode.call(enterCropMode, { target: image } as never)
+    image.setControlsVisibility({ mlc: false, mrc: false, mtc: false, mbc: false, tlc: false, trc: false, blc: false, brc: false })
+    this.canvas.setActiveObject(image)
+    this.events.onSelectSlot(id)
+    this.events.onCropModeChange(true)
+    this.canvas.requestRenderAll()
+    return true
+  }
+
+  finishCrop(commit = true) {
+    if (!this.croppingSlotId) return
+    const id = this.croppingSlotId
+    const image = this.canvas.getObjects().find((object) => (object as TaggedObject).data?.role === 'image' && (object as TaggedObject).data?.slotId === id) as FabricImage | undefined
+    if (commit && image) this.emitImageChange(image)
+    if (!commit && this.page && this.cropBackup) {
+      const slot = this.page.slots.find((item) => item.id === id)
+      if (slot) Object.assign(slot, this.cropBackup)
+    }
+    if (image) image.fire('mousedblclick', { target: image } as never)
+    this.croppingSlotId = null
+    this.cropBackup = null
+    this.events.onCropModeChange(false)
+    if (this.page) void this.render(this.page, id)
   }
 
   async render(page: PosterPage, selectedSlotId?: string) {
+    if (this.croppingSlotId) return
     const version = ++this.renderVersion
     this.page = page
     this.canvas.discardActiveObject()
@@ -199,18 +225,25 @@ export class PosterCanvas {
       image.applyFilters()
       const naturalWidth = image.width || 1
       const naturalHeight = image.height || 1
-      const coverScale = Math.max(box.width / naturalWidth, box.imageHeight / naturalHeight)
-      const scale = coverScale * Math.max(1, slot.zoom || 1)
-      const imageWidth = naturalWidth * scale
-      const imageHeight = naturalHeight * scale
+      const baseCropWidth = Math.min(naturalWidth, naturalHeight * box.width / box.imageHeight)
+      const baseCropHeight = Math.min(naturalHeight, naturalWidth * box.imageHeight / box.width)
+      const zoom = Math.max(1, Math.min(3, slot.zoom || 1))
+      const cropWidth = baseCropWidth / zoom
+      const cropHeight = baseCropHeight / zoom
       image.set({
-        left: box.x - Math.max(0, imageWidth - box.width) * Math.max(0, Math.min(1, slot.cropX ?? 0.5)),
-        top: box.y - Math.max(0, imageHeight - box.imageHeight) * Math.max(0, Math.min(1, slot.cropY ?? 0.5)),
+        left: box.x,
+        top: box.y,
         originX: 'left',
         originY: 'top',
-        scaleX: scale,
-        scaleY: scale,
+        width: cropWidth,
+        height: cropHeight,
+        cropX: Math.max(0, naturalWidth - cropWidth) * Math.max(0, Math.min(1, slot.cropX ?? 0.5)),
+        cropY: Math.max(0, naturalHeight - cropHeight) * Math.max(0, Math.min(1, slot.cropY ?? 0.5)),
+        scaleX: box.width / cropWidth,
+        scaleY: box.imageHeight / cropHeight,
         lockRotation: true,
+        lockMovementX: true,
+        lockMovementY: true,
         cornerColor: page.style.accent,
         cornerStrokeColor: '#ffffff',
         borderColor: page.style.accent,
@@ -228,7 +261,7 @@ export class PosterCanvas {
           absolutePositioned: true,
         }),
       })
-      image.setControlsVisibility({ mt: false, mb: false, ml: false, mr: false, mtr: false })
+      image.setControlsVisibility({ tl: false, tr: false, bl: false, br: false, mt: false, mb: false, ml: false, mr: false, mtr: false })
       const tagged = image as TaggedObject
       tagged.data = { role: 'image', slotId: slot.id }
       this.canvas.add(image)
@@ -326,20 +359,6 @@ export class PosterCanvas {
     if (!this.page) return
     const width = Math.max(260, Math.min(maxWidth, this.page.width))
     this.canvas.setDimensions({ width, height: width * 1.5 }, { cssOnly: true })
-  }
-
-  async exportPng(page: PosterPage): Promise<string> {
-    const selectedSlotId = (this.canvas.getActiveObject() as TaggedObject | undefined)?.data?.slotId
-    const exportPage: PosterPage = {
-      ...page,
-      slots: page.slots.map((slot) => ({ ...slot, src: slot.originalSrc || slot.src })),
-    }
-    await this.render(exportPage)
-    this.canvas.discardActiveObject()
-    this.canvas.requestRenderAll()
-    const result = this.canvas.toDataURL({ format: 'png', quality: 1, multiplier: 1 })
-    await this.render(page, selectedSlotId)
-    return result
   }
 
   dispose() {
