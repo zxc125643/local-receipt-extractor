@@ -78,3 +78,4 @@ def create_app(settings: Settings | None = None, enable_sync: bool = True) -> Fa
 
 
 app = create_app()
+
