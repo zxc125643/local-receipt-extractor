@@ -12,6 +12,20 @@ const MAX_BODY = 6 * 1024 * 1024
 const clamp = (value, min, max) => Math.max(min, Math.min(max, Number(value) || 0))
 const esc = (value = '') => String(value).replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' })[char])
 
+function fitFontSize(text, maxWidth, preferred, minimum) {
+  const units = Array.from(String(text || '')).reduce((sum, character) => sum + (/^[\x00-\xff]$/.test(character) ? 0.58 : 1), 0)
+  if (!units) return preferred
+  return Math.max(minimum, Math.min(preferred, Math.floor(maxWidth / units)))
+}
+
+function lighten(hex, amount) {
+  const normalized = String(hex || '').replace('#', '')
+  if (!/^[0-9a-f]{6}$/i.test(normalized)) return hex
+  const value = Number.parseInt(normalized, 16)
+  const channel = (shift) => Math.max(0, Math.min(255, ((value >> shift) & 255) + amount))
+  return `#${[channel(16), channel(8), channel(0)].map((part) => part.toString(16).padStart(2, '0')).join('')}`
+}
+
 function layout(page) {
   const outer = 12
   const headerHeight = 132
@@ -91,14 +105,16 @@ function textLines(text, maxChars, maxLines = 2) {
 function overlaySvg(page, boxes) {
   const style = page.style || {}
   const radius = clamp(style.radius, 0, 48)
-  const titleSize = page.columns > 3 ? 48 : 62
   const header = boxes.header
+  const title = page.title || '输入教程标题'
+  const titleSize = fitFontSize(title, header.width - 128, page.columns > 3 ? 48 : 62, 28)
+  const subtitleSize = fitFontSize(page.subtitle, header.width - 144, 25, 17)
   const nodes = [
-    `<defs><linearGradient id="header" x1="0" x2="1"><stop offset="0" stop-color="${esc(style.accent)}"/><stop offset=".52" stop-color="#ffd873"/><stop offset="1" stop-color="${esc(style.accent)}"/></linearGradient></defs>`,
+    `<defs><linearGradient id="header" x1="0%" x2="100%"><stop offset="0" stop-color="${esc(style.accent)}"/><stop offset="52%" stop-color="${esc(lighten(style.accent, 32))}"/><stop offset="100%" stop-color="${esc(style.accent)}"/></linearGradient></defs>`,
     `<rect x="${header.x}" y="${header.y}" width="${header.width}" height="${header.height}" rx="${radius}" fill="url(#header)" stroke="${esc(style.accent)}" stroke-width="2"/>`,
-    `<text x="540" y="${header.y + (page.subtitle ? 75 : 88)}" text-anchor="middle" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="${titleSize}" font-weight="900" fill="${esc(style.titleFill)}" stroke="${esc(style.titleStroke)}" stroke-width="5" paint-order="stroke">${esc(page.title || '输入教程标题')}</text>`,
+    `<text x="540" y="${header.y + (page.subtitle ? 75 : 88)}" text-anchor="middle" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="${titleSize}" font-weight="900" fill="${esc(style.titleFill)}" stroke="${esc(style.titleStroke)}" stroke-width="5" paint-order="stroke">${esc(title)}</text>`,
   ]
-  if (page.subtitle) nodes.push(`<text x="540" y="${header.y + 116}" text-anchor="middle" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="25" font-weight="700" fill="${esc(style.titleFill)}" stroke="${esc(style.titleStroke)}" stroke-width="2" paint-order="stroke">${esc(page.subtitle)}</text>`)
+  if (page.subtitle) nodes.push(`<text x="540" y="${header.y + 116}" text-anchor="middle" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="${subtitleSize}" font-weight="700" fill="${esc(style.titleFill)}" stroke="${esc(style.titleStroke)}" stroke-width="2" paint-order="stroke">${esc(page.subtitle)}</text>`)
   boxes.slots.forEach((box, index) => {
     const slot = page.slots[index]
     const captionY = box.y + box.imageHeight

@@ -133,19 +133,22 @@ export class PosterCanvas {
       evented: false,
     }))
     this.canvas.add(new Textbox(page.title || '输入教程标题', {
-      left: layout.header.x + 42,
+      left: layout.header.x + 52,
       top: layout.header.y + (page.subtitle ? 20 : 32),
       originX: 'left',
       originY: 'top',
-      width: layout.header.width - 84,
+      width: layout.header.width - 104,
       fontFamily: 'Microsoft YaHei, PingFang SC, sans-serif',
-      fontSize: page.columns > 3 ? 48 : 62,
+      fontSize: this.fitFontSize(page.title || '输入教程标题', layout.header.width - 128, page.columns > 3 ? 48 : 62, 28),
       fontWeight: 900,
       textAlign: 'center',
       fill: page.style.titleFill,
       stroke: page.style.titleStroke,
       strokeWidth: 5,
       paintFirst: 'stroke',
+      padding: 8,
+      splitByGrapheme: true,
+      objectCaching: false,
       selectable: false,
       evented: false,
     }))
@@ -157,13 +160,16 @@ export class PosterCanvas {
         originY: 'top',
         width: layout.header.width - 120,
         fontFamily: 'Microsoft YaHei, PingFang SC, sans-serif',
-        fontSize: 25,
+        fontSize: this.fitFontSize(page.subtitle, layout.header.width - 144, 25, 17),
         fontWeight: 700,
         textAlign: 'center',
         fill: page.style.titleFill,
         stroke: page.style.titleStroke,
         strokeWidth: 2,
         paintFirst: 'stroke',
+        padding: 5,
+        splitByGrapheme: true,
+        objectCaching: false,
         selectable: false,
         evented: false,
       }))
@@ -372,6 +378,12 @@ export class PosterCanvas {
     const value = Number.parseInt(normalized, 16)
     const channel = (shift: number) => Math.max(0, Math.min(255, ((value >> shift) & 255) + amount))
     return `#${[channel(16), channel(8), channel(0)].map((part) => part.toString(16).padStart(2, '0')).join('')}`
+  }
+
+  private fitFontSize(text: string, maxWidth: number, preferred: number, minimum: number): number {
+    const units = Array.from(text || '').reduce((sum, character) => sum + (/^[\x00-\xff]$/.test(character) ? 0.58 : 1), 0)
+    if (!units) return preferred
+    return Math.max(minimum, Math.min(preferred, Math.floor(maxWidth / units)))
   }
 
   private filtersForTone(tone: PosterPage['tone']) {
