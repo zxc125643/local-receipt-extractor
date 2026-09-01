@@ -256,7 +256,7 @@ def _add_compact_image(sheet, cell: str, image_bytes: bytes | None, width: int, 
     return True
 
 
-def create_reimbursement_workbook(rows: Sequence[dict[str, str]], payment_images: dict[str, bytes], invoice_images: dict[str, bytes]) -> bytes:
+def create_reimbursement_workbook(rows: Sequence[dict[str, str]], payment_images: dict[str, bytes], invoice_images: dict[str, bytes], invoice_rows: Sequence[dict[str, str]] | None = None) -> bytes:
     """Writes a compact, filled-only reimbursement workbook based on the supplied layout."""
     template_path = Path(__file__).resolve().parents[2] / "templates" / "reimbursement-template.xlsx"
     workbook = load_workbook(template_path)
@@ -330,12 +330,24 @@ def create_reimbursement_workbook(rows: Sequence[dict[str, str]], payment_images
         cell.font = Font(bold=True)
     for letter, width in {"A": 8, "B": 13, "C": 13, "D": 18, "E": 14, "F": 14}.items():
         invoice_sheet.column_dimensions[letter].width = width
+    matched_payments = {row.get("_invoice_source", ""): row for row in rows if row.get("_invoice_source")}
+    if invoice_rows is None:
+        invoice_rows = [{
+            "_source": source,
+            "invoice_amount": payment.get("发票金额", ""),
+            "invoice_number": payment.get("发票号码", ""),
+        } for source, payment in matched_payments.items()]
     invoice_index = 2
-    for row in rows:
-        if row.get("是否有发票") != "有（金额匹配）":
-            continue
-        invoice_sheet.append([invoice_index - 1, row.get("付款金额", ""), row.get("发票金额", ""), row.get("发票号码", ""), "金额匹配"])
-        source = row.get("_invoice_source", "")
+    for invoice in invoice_rows:
+        source = invoice.get("_source", "")
+        payment = matched_payments.get(source)
+        invoice_sheet.append([
+            invoice_index - 1,
+            payment.get("付款金额", "") if payment else "",
+            invoice.get("invoice_amount", ""),
+            invoice.get("invoice_number", ""),
+            "金额匹配" if payment else "未匹配",
+        ])
         image_bytes = invoice_images.get(source)
         _add_compact_image(invoice_sheet, f"F{invoice_index}", image_bytes, 80, 120)
         invoice_sheet.row_dimensions[invoice_index].height = 92

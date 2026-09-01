@@ -154,3 +154,15 @@ def test_expense_classification_has_requested_categories():
     assert classify_expense({"商家名称": "滴滴出行"}) == "交通费"
     assert classify_expense({"商家名称": "某餐饮店"}) == "餐费"
     assert classify_expense({"商家名称": "未知商户"}) == "其他"
+
+
+def test_reimbursement_export_keeps_unmatched_invoice_in_invoice_sheet():
+    content = create_reimbursement_workbook(
+        [],
+        {},
+        {},
+        [{"_source": "invoice.pdf", "invoice_amount": "2400.00", "invoice_number": "26424000000104330311"}],
+    )
+    workbook = load_workbook(BytesIO(content), data_only=False)
+
+    assert list(workbook["发票明细"].values)[1][:5] == (1, None, "2400.00", "26424000000104330311", "未匹配")

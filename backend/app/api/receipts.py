@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import Response
 
 from backend.app.api.deps import assert_desktop_auth
-from backend.app.services.receipt_extractor import LocalReceiptExtractor, build_payment_rows, clean_columns, create_reimbursement_workbook
+from backend.app.services.receipt_extractor import LocalReceiptExtractor, build_payment_rows, clean_columns, create_reimbursement_workbook, extract_invoice_fields, is_invoice
 
 router = APIRouter(prefix="/receipts", tags=["receipts"], dependencies=[Depends(assert_desktop_auth)])
 ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp", "application/pdf"}
@@ -29,6 +29,7 @@ class ReceiptJob:
     rows: list[dict[str, str]] = field(default_factory=list)
     payment_images: dict[str, bytes] = field(default_factory=dict)
     invoice_images: dict[str, bytes] = field(default_factory=dict)
+    invoices: list[dict[str, str]] = field(default_factory=list)
 
 
 jobs: dict[str, ReceiptJob] = {}
@@ -93,6 +94,7 @@ def run_receipt_job_sync(job: ReceiptJob, requested_columns: list[str]) -> None:
     read_many = getattr(extractor, "read_many", None)
     ocr_results = read_many(contents, on_progress) if read_many else [extractor.read(content) for content in contents]
     documents = [(name, lines) for (name, _), lines in zip(job.files, ocr_results, strict=True)]
+    job.invoices = [{**extract_invoice_fields(lines), "_source": name} for name, lines in documents if is_invoice(lines)]
     job.columns, job.rows = build_payment_rows(requested_columns, documents)
 
 
@@ -134,7 +136,7 @@ async def export_receipts(payload: dict[str, object]) -> Response:
     job = jobs[job_id]
     if job.status != "completed":
         raise HTTPException(status_code=422, detail="图片仍在识别中，请等待处理完成。")
-    content = create_reimbursement_workbook(job.rows, job.payment_images, job.invoice_images)
+    content = create_reimbursement_workbook(job.rows, job.payment_images, job.invoice_images, job.invoices)
     return Response(
         content=content,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
