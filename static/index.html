@@ -1,0 +1,10 @@
+<!doctype html><meta charset="utf-8"><title>截图提取到 Excel</title>
+<style>body{font:16px system-ui;max-width:900px;margin:40px auto;padding:0 18px}textarea{width:100%;height:70px}button,select{padding:9px;margin:8px 4px 8px 0}.progress{margin:14px 0}table{border-collapse:collapse;width:100%}td,th{border:1px solid #ddd;padding:6px;text-align:left}</style>
+<h1>截图提取到 Excel</h1><p>本项目完全本地 OCR，支持支付宝、微信、订单、发票截图混传。</p>
+<label>提取列（逗号分隔）</label><textarea id="columns">付款金额、付款时间、商家名称、备注</textarea><br>
+<label>识别线程 <select id="workers"><option value="1">1（低占用）</option><option value="2" selected>2（推荐）</option><option value="3">3</option><option value="4">4（较快）</option></select></label>
+<input id="files" type="file" accept="image/*,.pdf" multiple><button id="start">开始提取</button><div class="progress" id="progress"></div><div id="result"></div>
+<script>
+const $=id=>document.getElementById(id); let result;
+$("start").onclick=async()=>{const files=[...$("files").files];if(!files.length)return alert("请选择文件");const form=new FormData();form.append("columns",JSON.stringify($("columns").value.split(/[，,、\\n]+/).filter(Boolean)));form.append("worker_count",$("workers").value);files.forEach(f=>form.append("files",f));const started=await fetch("/api/process",{method:"POST",body:form}).then(r=>r.json());for(;;){await new Promise(r=>setTimeout(r,350));const s=await fetch(`/api/status/${started.job_id}`).then(r=>r.json());$("progress").textContent=`${s.completed}/${s.total}（${s.current_file||"处理中"}）`;if(s.status==="failed")return alert(s.error);if(s.status==="completed"){result=s;break}};$("result").innerHTML=`<button id="export">导出 Excel</button><table><tr><th>源文件</th>${result.columns.map(c=>`<th>${c}</th>`).join("")}</tr>${result.rows.map(r=>`<tr><td>${r["源文件"]}</td>${result.columns.map(c=>`<td>${r[c]||"—"}</td>`).join("")}</tr>`).join("")}</table>`;$("export").onclick=async()=>{const b=await fetch("/api/export",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({job_id:result.job_id})}).then(r=>r.blob());const a=document.createElement("a");a.href=URL.createObjectURL(b);a.download="截图提取结果.xlsx";a.click()}};
+</script>
