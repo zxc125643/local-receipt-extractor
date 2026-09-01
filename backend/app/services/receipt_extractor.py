@@ -375,14 +375,15 @@ class LocalReceiptExtractor:
         result, _elapsed = self._ocr(image_bytes)
         return [item[1] for item in result or []]
 
-    def read_many(self, images: Sequence[bytes], progress: Callable[[int, int, int], None] | None = None) -> list[list[str]]:
+    def read_many(self, images: Sequence[bytes], progress: Callable[[int, int, int], None] | None = None, worker_count: int | None = None) -> list[list[str]]:
         """Run a small number of independent local OCR sessions concurrently."""
         if len(images) < 2:
             results = [self.read(image) for image in images]
             if images and progress:
                 progress(1, 1, 0)
             return results
-        worker_count = min(max(1, int(getenv("RECEIPT_OCR_WORKERS", "2"))), len(images))
+        configured_workers = int(getenv("RECEIPT_OCR_WORKERS", "2")) if worker_count is None else worker_count
+        worker_count = min(max(1, configured_workers), len(images))
         readers = local()
 
         def read_one(image: bytes) -> list[str]:

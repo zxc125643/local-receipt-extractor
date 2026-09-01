@@ -14,12 +14,13 @@ export function ReceiptExtractorPage() {
   const fileInput = useRef<HTMLInputElement>(null);
   const [columnsText, setColumnsText] = useState("付款金额、付款时间、商家名称、备注");
   const [files, setFiles] = useState<File[]>([]);
+  const [workerCount, setWorkerCount] = useState(2);
   const [token, setToken] = useState(getSavedApiToken());
   const [result, setResult] = useState<{ job_id: string; columns: string[]; rows: Array<Record<string, string>> } | null>(null);
   const [progress, setProgress] = useState<ReceiptProgress | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
   const processMutation = useMutation({
-    mutationFn: ({ columns, files }: { columns: string[]; files: File[] }) => processReceiptImages({ columns, files }, setProgress),
+    mutationFn: ({ columns, files, workerCount }: { columns: string[]; files: File[]; workerCount: number }) => processReceiptImages({ columns, files, workerCount }, setProgress),
     onSuccess: (data) => {
       setResult(data);
       setNotice({ tone: "success", text: `已在本机识别 ${data.rows.length} 张图片。请核对后导出 Excel。` });
@@ -41,7 +42,7 @@ export function ReceiptExtractorPage() {
     setResult(null);
     setProgress({ completed: 0, total: files.length, currentFile: "", status: "queued" });
     setNotice({ tone: "info", text: "正在本机识别，图片不会上传到云端。" });
-    processMutation.mutate({ columns, files });
+    processMutation.mutate({ columns, files, workerCount });
   };
 
   return (
@@ -68,6 +69,7 @@ export function ReceiptExtractorPage() {
         <div className="receipt-actions">
           <button className="secondary-button" type="button" onClick={() => fileInput.current?.click()}>选择图片</button>
           <span className="muted-text">{files.length ? `已选 ${files.length} 个文件` : "支持 JPG、PNG、WEBP、PDF，单次最多 200 个文件"}</span>
+          <label className="filter-field receipt-workers"><span className="field-label">识别线程</span><select className="text-input" value={workerCount} onChange={(event) => setWorkerCount(Number(event.target.value))}><option value={1}>1（低占用）</option><option value={2}>2（推荐）</option><option value={3}>3</option><option value={4}>4（较快）</option></select></label>
           <button className="primary-button" disabled={processMutation.isPending} type="button" onClick={startProcessing}>{processMutation.isPending ? "本机识别中…" : "开始提取"}</button>
         </div>
       </div>

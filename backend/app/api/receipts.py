@@ -30,6 +30,7 @@ class ReceiptJob:
     payment_images: dict[str, bytes] = field(default_factory=dict)
     invoice_images: dict[str, bytes] = field(default_factory=dict)
     invoices: list[dict[str, str]] = field(default_factory=list)
+    worker_count: int = 2
 
 
 jobs: dict[str, ReceiptJob] = {}
@@ -56,6 +57,7 @@ def parse_columns(raw_columns: str) -> list[str]:
 @router.post("/process")
 async def process_receipts(
     columns: str = Form(...),
+    worker_count: int = Form(2),
     files: list[UploadFile] = File(...),
 ) -> dict[str, object]:
     requested_columns = parse_columns(columns)
@@ -63,6 +65,8 @@ async def process_receipts(
         raise HTTPException(status_code=422, detail="请至少选择一张图片。")
     if len(files) > MAX_FILES:
         raise HTTPException(status_code=422, detail=f"单次最多处理 {MAX_FILES} 张图片。")
+    if worker_count < 1 or worker_count > 4:
+        raise HTTPException(status_code=422, detail="线程数必须是 1 到 4。")
 
     uploaded_images: list[tuple[str, bytes]] = []
     source_images: dict[str, bytes] = {}
@@ -77,7 +81,7 @@ async def process_receipts(
             raise HTTPException(status_code=422, detail=f"无法识别 {image.filename}：{error}") from error
 
     job_id = str(uuid.uuid4())
-    job = ReceiptJob(total=len(uploaded_images), files=uploaded_images, payment_images=source_images, invoice_images=source_images)
+    job = ReceiptJob(total=len(uploaded_images), files=uploaded_images, payment_images=source_images, invoice_images=source_images, worker_count=worker_count)
     jobs[job_id] = job
     asyncio.create_task(run_receipt_job(job, requested_columns))
     return {"job_id": job_id, "status": job.status, "total": job.total, "completed": job.completed}
@@ -92,7 +96,7 @@ def run_receipt_job_sync(job: ReceiptJob, requested_columns: list[str]) -> None:
 
     contents = [content for _, content in job.files]
     read_many = getattr(extractor, "read_many", None)
-    ocr_results = read_many(contents, on_progress) if read_many else [extractor.read(content) for content in contents]
+    ocr_results = read_many(contents, on_progress, worker_count=job.worker_count) if read_many else [extractor.read(content) for content in contents]
     documents = [(name, lines) for (name, _), lines in zip(job.files, ocr_results, strict=True)]
     job.invoices = [{**extract_invoice_fields(lines), "_source": name} for name, lines in documents if is_invoice(lines)]
     job.columns, job.rows = build_payment_rows(requested_columns, documents)
