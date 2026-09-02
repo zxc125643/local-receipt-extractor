@@ -38,6 +38,10 @@ def clean_columns(raw_columns: Sequence[str]) -> list[str]:
 def _next_value(lines: OCRLines, labels: set[str]) -> str:
     normalized_labels = {normalize_column_name(label) for label in labels}
     for index, line in enumerate(lines[:-1]):
+        if re.search(r"[:：]", line):
+            left, right = re.split(r"[:：]", line, maxsplit=1)
+            if normalize_column_name(left) in normalized_labels and right.strip():
+                return right.strip()
         if normalize_column_name(line) in normalized_labels:
             for candidate in lines[index + 1 :]:
                 value = candidate.strip()
@@ -47,7 +51,9 @@ def _next_value(lines: OCRLines, labels: set[str]) -> str:
 
 
 def _payment_time(text: str) -> str:
-    matched = re.search(r"(20\d{2})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日\s*(\d{1,2}:\d{2}(?::\d{2})?)?", text)
+    normalized = re.sub(r"[年月日./]", "-", text)
+    normalized = re.sub(r"-(?=\s*\d{1,2}:\d{2})", " ", normalized)
+    matched = re.search(r"(20\d{2})\s*-\s*(\d{1,2})\s*-\s*(\d{1,2})(?:\s+|[Tt])*(\d{1,2}:\d{2}(?::\d{2})?)?", normalized)
     if not matched:
         return ""
     year, month, day, clock = matched.groups()
@@ -373,7 +379,22 @@ class LocalReceiptExtractor:
             reader = PdfReader(BytesIO(image_bytes))
             return [line.strip() for page in reader.pages for line in (page.extract_text() or "").splitlines() if line.strip()]
         result, _elapsed = self._ocr(image_bytes)
-        return [item[1] for item in result or []]
+        lines = [item[1] for item in result or []]
+        if lines:
+            return lines
+        # Compressed or low-contrast screenshots sometimes need a local retry.
+        try:
+            from PIL import Image, ImageEnhance, ImageOps
+            source = Image.open(BytesIO(image_bytes)).convert("RGB")
+            scale = max(1.0, min(2.5, 1800 / max(source.width, source.height)))
+            if scale > 1:
+                source = source.resize((int(source.width * scale), int(source.height * scale)), Image.Resampling.LANCZOS)
+            enhanced = ImageEnhance.Contrast(ImageOps.grayscale(source)).enhance(1.8)
+            output = BytesIO(); enhanced.save(output, format="PNG")
+            retry, _elapsed = self._ocr(output.getvalue())
+            return [item[1] for item in retry or []]
+        except Exception:
+            return lines
 
     def read_many(self, images: Sequence[bytes], progress: Callable[[int, int, int], None] | None = None, worker_count: int | None = None) -> list[list[str]]:
         """Run a small number of independent local OCR sessions concurrently."""
