@@ -38,8 +38,8 @@ def clean_columns(raw_columns: Sequence[str]) -> list[str]:
 def _next_value(lines: OCRLines, labels: set[str]) -> str:
     normalized_labels = {normalize_column_name(label) for label in labels}
     for index, line in enumerate(lines[:-1]):
-        if re.search(r"[:：]", line):
-            left, right = re.split(r"[:：]", line, maxsplit=1)
+        if re.search(r":|\uFF1A", line):
+            left, right = re.split(r":|\uFF1A", line, maxsplit=1)
             if normalize_column_name(left) in normalized_labels and right.strip():
                 return right.strip()
         if normalize_column_name(line) in normalized_labels:
@@ -379,22 +379,7 @@ class LocalReceiptExtractor:
             reader = PdfReader(BytesIO(image_bytes))
             return [line.strip() for page in reader.pages for line in (page.extract_text() or "").splitlines() if line.strip()]
         result, _elapsed = self._ocr(image_bytes)
-        lines = [item[1] for item in result or []]
-        if lines:
-            return lines
-        # Compressed or low-contrast screenshots sometimes need a local retry.
-        try:
-            from PIL import Image, ImageEnhance, ImageOps
-            source = Image.open(BytesIO(image_bytes)).convert("RGB")
-            scale = max(1.0, min(2.5, 1800 / max(source.width, source.height)))
-            if scale > 1:
-                source = source.resize((int(source.width * scale), int(source.height * scale)), Image.Resampling.LANCZOS)
-            enhanced = ImageEnhance.Contrast(ImageOps.grayscale(source)).enhance(1.8)
-            output = BytesIO(); enhanced.save(output, format="PNG")
-            retry, _elapsed = self._ocr(output.getvalue())
-            return [item[1] for item in retry or []]
-        except Exception:
-            return lines
+        return [item[1] for item in result or []]
 
     def read_many(self, images: Sequence[bytes], progress: Callable[[int, int, int], None] | None = None, worker_count: int | None = None) -> list[list[str]]:
         """Run a small number of independent local OCR sessions concurrently."""
