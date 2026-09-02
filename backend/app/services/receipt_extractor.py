@@ -75,7 +75,7 @@ def _personal_payment_title(lines: Sequence[str]) -> tuple[str, str]:
 
 def _unlabelled_merchant_title(lines: Sequence[str]) -> str:
     """Some wallet receipts put the merchant only in the large page title."""
-    ignored = ("账单", "支付成功", "收单机构", "支付方式", "交易单号", "经营单号", "当前状态", "账单服务", "收款方")
+    ignored = ("账单", "支付成功", "收单机构", "支付方式", "支付时间", "付款时间", "转账时间", "交易单号", "经营单号", "当前状态", "账单服务", "收款方")
     for line in lines[:8]:
         compact = re.sub(r"\s+", "", line)
         if any(label in compact for label in ignored) or re.search(r"[-−]?\d[\d,]*\.\d{2}", compact):
