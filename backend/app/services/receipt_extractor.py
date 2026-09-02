@@ -38,6 +38,10 @@ def clean_columns(raw_columns: Sequence[str]) -> list[str]:
 def _next_value(lines: OCRLines, labels: set[str]) -> str:
     normalized_labels = {normalize_column_name(label) for label in labels}
     for index, line in enumerate(lines[:-1]):
+        if re.search(r":|\uFF1A", line):
+            left, right = re.split(r":|\uFF1A", line, maxsplit=1)
+            if normalize_column_name(left) in normalized_labels and right.strip():
+                return right.strip()
         if normalize_column_name(line) in normalized_labels:
             for candidate in lines[index + 1 :]:
                 value = candidate.strip()
@@ -47,7 +51,9 @@ def _next_value(lines: OCRLines, labels: set[str]) -> str:
 
 
 def _payment_time(text: str) -> str:
-    matched = re.search(r"(20\d{2})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日\s*(\d{1,2}:\d{2}(?::\d{2})?)?", text)
+    normalized = re.sub(r"[年月日./]", "-", text)
+    normalized = re.sub(r"-(?=\s*\d{1,2}:\d{2})", " ", normalized)
+    matched = re.search(r"(20\d{2})\s*-\s*(\d{1,2})\s*-\s*(\d{1,2})(?:\s+|[Tt])*(\d{1,2}:\d{2}(?::\d{2})?)?", normalized)
     if not matched:
         return ""
     year, month, day, clock = matched.groups()
@@ -69,7 +75,7 @@ def _personal_payment_title(lines: Sequence[str]) -> tuple[str, str]:
 
 def _unlabelled_merchant_title(lines: Sequence[str]) -> str:
     """Some wallet receipts put the merchant only in the large page title."""
-    ignored = ("账单", "支付成功", "收单机构", "支付方式", "交易单号", "经营单号", "当前状态", "账单服务", "收款方")
+    ignored = ("账单", "支付成功", "收单机构", "支付方式", "支付时间", "付款时间", "转账时间", "交易单号", "经营单号", "当前状态", "账单服务", "收款方")
     for line in lines[:8]:
         compact = re.sub(r"\s+", "", line)
         if any(label in compact for label in ignored) or re.search(r"[-−]?\d[\d,]*\.\d{2}", compact):
