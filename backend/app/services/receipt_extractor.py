@@ -427,11 +427,23 @@ class LocalReceiptExtractor:
                 sessions.put(reader)
 
         results: list[list[str] | None] = [None] * len(images)
-        with ThreadPoolExecutor(max_workers=worker_count, thread_name_prefix="receipt-ocr") as executor:
-            futures = {executor.submit(read_one, image): index for index, image in enumerate(images)}
-            for completed, future in enumerate(as_completed(futures), start=1):
-                index = futures[future]
-                results[index] = future.result()
-                if progress:
-                    progress(completed, len(images), index)
+        timeout = max(10, int(getenv("RECEIPT_OCR_TIMEOUT_SECONDS", "45")))
+        # Use one short-lived executor per image.  A malformed PDF or image can
+        # block the native OCR call indefinitely; timing it out lets the batch
+        # continue and report the skipped file instead of appearing frozen.
+        for index, image in enumerate(images):
+            if progress:
+                progress(index, len(images), index)
+            executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="receipt-ocr")
+            future = executor.submit(read_one, image)
+            try:
+                results[index] = future.result(timeout=timeout)
+            except TimeoutError:
+                results[index] = []
+            except Exception:
+                results[index] = []
+            finally:
+                executor.shutdown(wait=False, cancel_futures=True)
+            if progress:
+                progress(index + 1, len(images), index)
         return [result or [] for result in results]
