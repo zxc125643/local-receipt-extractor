@@ -80,6 +80,7 @@ async def process_receipts(
         except Exception as error:
             raise HTTPException(status_code=422, detail=f"无法识别 {image.filename}：{error}") from error
 
+    get_extractor()
     job_id = str(uuid.uuid4())
     job = ReceiptJob(total=len(uploaded_images), files=uploaded_images, payment_images=source_images, invoice_images=source_images, worker_count=worker_count)
     jobs[job_id] = job
