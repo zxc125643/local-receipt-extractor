@@ -534,6 +534,11 @@ def create_reimbursement_workbook(rows: Sequence[dict[str, str]], payment_images
             "invoice_amount": payment.get("发票金额", ""),
             "invoice_number": payment.get("发票号码", ""),
         } for source, payment in matched_payments.items()]
+    else:
+        # Invoice-only rows belong in the payment summary, but must not be
+        # repeated in the invoice-detail tab.  That tab documents only
+        # invoices linked to an actual payment record.
+        invoice_rows = [invoice for invoice in invoice_rows if matched_payments.get(invoice.get("_source", ""))]
     invoice_index = 3
     for invoice in invoice_rows:
         source = invoice.get("_source", "")
@@ -547,6 +552,8 @@ def create_reimbursement_workbook(rows: Sequence[dict[str, str]], payment_images
             payment.get("_invoice_date_warning", "正常") if payment else "需核对",
         ])
         image_bytes = _lookup_image(invoice_images, source) or _lookup_image(payment_images, source)
+        if not image_bytes and payment:
+            image_bytes = _lookup_image(payment_images, payment.get("_invoice_source", ""))
         _add_compact_image(invoice_sheet, f"G{invoice_index}", image_bytes, 150, 125)
         for cell in invoice_sheet[invoice_index]:
             cell.border = Border(left=table_edge, right=table_edge, top=table_edge, bottom=table_edge)
