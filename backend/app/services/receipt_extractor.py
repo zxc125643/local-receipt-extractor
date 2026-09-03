@@ -7,7 +7,7 @@ from collections.abc import Callable, Sequence
 from io import BytesIO
 from os import getenv
 from pathlib import Path
-from threading import local
+from queue import Queue
 
 from openpyxl import Workbook, load_workbook
 from openpyxl.drawing.image import Image as ExcelImage
