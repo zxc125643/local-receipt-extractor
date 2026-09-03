@@ -376,6 +376,19 @@ def build_payment_rows(columns: Sequence[str], documents: Sequence[tuple[str, OC
         row["是否有发票"] = "仅发票（无支付记录）"
         row["_invoice_source"] = source
         row["_invoice_only"] = "1"
+        # Populate the requested visible columns as well as the internal
+        # invoice fields.  The UI preview must not show an apparently empty
+        # row for a legitimate invoice-only reimbursement.
+        for column in result_columns:
+            alias = COLUMN_ALIASES.get(column)
+            if alias == "payment_amount":
+                row[column] = amount
+            elif alias == "payment_time":
+                row[column] = date
+            elif alias == "merchant_name":
+                row[column] = merchant
+            elif alias == "product_name":
+                row[column] = invoice.get("invoice_item", "")
         rows.append(row)
     return result_columns, rows
 
