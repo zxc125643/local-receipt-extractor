@@ -516,7 +516,35 @@ def create_reimbursement_workbook(rows: Sequence[dict[str, str]], payment_images
     for column in range(1, 9):
         payment_sheet.cell(total_row, column).border = Border(left=edge, right=edge, top=edge, bottom=edge)
     payment_sheet.auto_filter.ref = f"A2:H{total_row - 1}" if payment_rows else "A2:H2"
-    payment_sheet.print_area = f"A1:H{total_row}"
+    # Add the compact reimbursement summary shown below the total row.
+    # Invoice-only rows are included in the reimbursement total and counted
+    # as 有票, while rows explicitly marked 无票 form the no-invoice total.
+    note_row = total_row + 1
+    summary_header_row = total_row + 2
+    summary_value_row = total_row + 3
+    note_detail_row = total_row + 4
+    for row_number in (note_row, summary_header_row, summary_value_row, note_detail_row):
+        payment_sheet.row_dimensions[row_number].height = 24
+        for column in range(1, 9):
+            source = source_sheet.cell(3 if row_number != summary_header_row else 2, column)
+            target = payment_sheet.cell(row_number, column)
+            target._style = copy(source._style)
+            target.alignment = copy(source.alignment)
+            target.border = Border(left=edge, right=edge, top=edge, bottom=edge)
+    payment_sheet.merge_cells(start_row=note_row, start_column=1, end_row=note_row, end_column=8)
+    payment_sheet.cell(note_row, 1, "备注：")
+    payment_sheet.cell(summary_header_row, 1, "1")
+    payment_sheet.cell(summary_header_row, 2, "报销金额合计")
+    payment_sheet.cell(summary_header_row, 3, "有票")
+    payment_sheet.cell(summary_header_row, 4, "无票")
+    payment_sheet.cell(summary_value_row, 2, f"=E{total_row}")
+    payment_sheet.cell(summary_value_row, 3, f'=SUMIF(G3:G{total_row - 1},"有票",E3:E{total_row - 1})+SUMIF(G3:G{total_row - 1},"仅发票",E3:E{total_row - 1})')
+    payment_sheet.cell(summary_value_row, 4, f'=SUMIF(G3:G{total_row - 1},"无票",E3:E{total_row - 1})')
+    for column in (2, 3, 4):
+        payment_sheet.cell(summary_value_row, column).number_format = "0.00"
+    payment_sheet.cell(note_detail_row, 1, "2")
+    payment_sheet.cell(note_detail_row, 2, "")
+    payment_sheet.print_area = f"A1:H{note_detail_row}"
 
     # Remove the completed-example tabs and build a clean invoice tab containing only matched invoices.
     for sheet in list(workbook.worksheets):
