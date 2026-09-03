@@ -1,2 +1,6 @@
 pypdf==6.16.2
 PyMuPDF==1.28.2
+# Optional local high-accuracy OCR engine for invoices.  The application falls
+# back to RapidOCR if these packages are unavailable.
+paddlepaddle==3.3.1
+paddleocr==3.7.0

@@ -226,13 +226,31 @@ export function deleteProxy(id: number) {
 
 type ReceiptProgress = { completed: number; total: number; currentFile: string; status: string };
 type ReceiptResult = { job_id: string; columns: string[]; rows: Array<Record<string, string>> };
+export type ReceiptHistory = { job_id: string; created_at: string; title: string; total: number; columns: string[]; rows: Array<Record<string, string>> };
+
+export async function getReceiptHistory() {
+  const runtime = await getRuntimeConfig();
+  const response = await fetch(`${runtime.apiBaseUrl}/receipts/history`, { headers: { "X-Desktop-Token": runtime.apiToken } });
+  if (!response.ok) throw new Error("无法读取历史记录");
+  return response.json() as Promise<ReceiptHistory[]>;
+}
+export async function deleteReceiptHistory(jobId: string) {
+  const runtime = await getRuntimeConfig();
+  await fetch(`${runtime.apiBaseUrl}/receipts/history/${jobId}`, { method: "DELETE", headers: { "X-Desktop-Token": runtime.apiToken } });
+}
+export async function renameReceiptHistory(jobId: string, title: string) {
+  const runtime = await getRuntimeConfig();
+  const response = await fetch(`${runtime.apiBaseUrl}/receipts/history/${jobId}`, { method: "PATCH", headers: { "Content-Type": "application/json", "X-Desktop-Token": runtime.apiToken }, body: JSON.stringify({ title }) });
+  if (!response.ok) throw new Error("重命名失败");
+}
 
 const wait = (milliseconds: number) => new Promise((resolve) => window.setTimeout(resolve, milliseconds));
 
-export async function processReceiptImages(payload: { columns: string[]; files: File[] }, onProgress?: (progress: ReceiptProgress) => void) {
+export async function processReceiptImages(payload: { columns: string[]; files: File[]; workerCount?: number }, onProgress?: (progress: ReceiptProgress) => void) {
   const runtime = await getRuntimeConfig();
   const formData = new FormData();
   formData.append("columns", JSON.stringify(payload.columns));
+  formData.append("worker_count", String(payload.workerCount ?? 2));
   payload.files.forEach((file) => formData.append("files", file, file.name));
   const response = await fetch(`${runtime.apiBaseUrl}/receipts/process`, {
     method: "POST",
@@ -242,7 +260,7 @@ export async function processReceiptImages(payload: { columns: string[]; files: 
   if (!response.ok) {
     throw new Error(await response.text() || `识别失败（${response.status}）`);
   }
-  const started = await response.json() as { job_id: string; completed: number; total: number; status: string };
+  const started = await response.json() as { job_id: string; completed: number; total: number; status: string; duplicate_count?: number; duplicate_files?: string[] };
   onProgress?.({ completed: started.completed, total: started.total, currentFile: "", status: started.status });
   while (true) {
     await wait(350);
@@ -258,7 +276,7 @@ export async function processReceiptImages(payload: { columns: string[]; files: 
       throw new Error(status.error || "本地 OCR 识别失败。");
     }
     if (status.status === "completed") {
-      return { job_id: started.job_id, columns: status.columns || [], rows: status.rows || [] };
+      return { job_id: started.job_id, columns: status.columns || [], rows: status.rows || [], duplicate_count: started.duplicate_count || 0, duplicate_files: started.duplicate_files || [] };
     }
   }
 }
@@ -276,7 +294,16 @@ export async function downloadReceiptWorkbook(payload: { job_id: string; columns
   const url = URL.createObjectURL(await response.blob());
   const link = document.createElement("a");
   link.href = url;
-  link.download = "截图提取结果.xlsx";
+  const disposition = response.headers.get("Content-Disposition") || "";
+  const encodedName = disposition.match(/filename\*=(?:UTF-8''|utf-8'')([^;]+)/)?.[1];
+  const plainName = disposition.match(/filename="?([^";]+)"?/)?.[1];
+  let fileName = "截图提取结果.xlsx";
+  try {
+    fileName = encodedName ? decodeURIComponent(encodedName) : (plainName || fileName);
+  } catch {
+    fileName = plainName || fileName;
+  }
+  link.download = fileName;
   link.click();
   URL.revokeObjectURL(url);
 }

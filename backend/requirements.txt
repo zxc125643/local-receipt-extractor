@@ -6,6 +6,7 @@ sqlalchemy==2.0.36
 uvicorn==0.32.1
 pytest==8.3.4
 pytest-asyncio==0.24.0
+pypdf==6.16.2
 python-multipart==0.0.12
 faker==22.0.0
 requests==2.32.4
@@ -13,3 +14,4 @@ playwright==1.53.0
 patchright
 openpyxl==3.1.5
 rapidocr-onnxruntime==1.4.4
+Pillow==11.1.0
