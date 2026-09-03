@@ -378,6 +378,16 @@ class LocalReceiptExtractor:
 
             reader = PdfReader(BytesIO(image_bytes))
             return [line.strip() for page in reader.pages for line in (page.extract_text() or "").splitlines() if line.strip()]
+        try:
+            from PIL import Image
+            source = Image.open(BytesIO(image_bytes)).convert("RGB")
+            if max(source.width, source.height) > 2200:
+                scale = 2200 / max(source.width, source.height)
+                source = source.resize((int(source.width * scale), int(source.height * scale)), Image.Resampling.LANCZOS)
+                prepared = BytesIO(); source.save(prepared, format="JPEG", quality=90)
+                image_bytes = prepared.getvalue()
+        except Exception:
+            pass
         result, _elapsed = self._ocr(image_bytes)
         lines = [item[1] for item in result or []]
         if lines:
@@ -403,7 +413,7 @@ class LocalReceiptExtractor:
                 progress(1, 1, 0)
             return results
         configured_workers = int(getenv("RECEIPT_OCR_WORKERS", "2")) if worker_count is None else worker_count
-        worker_count = min(max(1, configured_workers), len(images))
+        worker_count = 1  # ONNX Runtime is unstable when this host creates multiple OCR sessions.
         sessions: Queue[LocalReceiptExtractor] = Queue()
         sessions.put(self)
         for _ in range(worker_count - 1):
