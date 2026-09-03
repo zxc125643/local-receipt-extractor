@@ -1,0 +1,64 @@
+{
+  "_comment": [
+    "本地引擎清单。管理页面(http://192.168.3.6:8080/manager)从这里读。",
+    "加一个模型 = 在 models 里加一项 + 建好对应的 systemd 服务,不用改代码。",
+    "两张 2080Ti 合计 45056 MiB,一次只装得下一个模型,所以各服务之间必须用",
+    "Conflicts= 互斥;页面切换时靠它把旧的停掉。",
+    "context_length 要和启动脚本里的 --max-model-len 一致,Hermes 那边也要对上,",
+    "否则会出现请求超窗被 400 的情况。"
+  ],
+  "models": [
+    {
+      "id": "qwen3.8-27b-abliterated-q6-k",
+      "unit": "qwen38-27b-q6-llama.service",
+      "label": "Qwen3.8 27B Abliterated",
+      "size": "27B VLM",
+      "quant": "GGUF Q6_K + F16 vision + MTP",
+      "weights": "/home/yi/models/Qwen3.8-27B-ABLITERATED-GGUF/Qwen3.8-27B-ABLITERATED-Q6_K.gguf",
+      "context": 131072,
+      "hermes_context": 122880,
+      "note": "默认本地模型。双 2080 Ti tensor split，Q8 KV，128K 上下文，MTP 3-token，支持视觉。",
+      "weights_size": "22G + 0.9G vision",
+      "thinking": "always"
+    },
+    {
+      "id": "ornith-1.5-35b-a3b-gptq-int4",
+      "unit": "ornith-a3b-vllm.service",
+      "label": "Ornith 1.5",
+      "size": "35B-A3B",
+      "quant": "GPTQ Int4",
+      "weights": "/home/yi/models/Ornith-1.5-35B-A3B-GPTQ-Int4",
+      "context": 262144,
+      "hermes_context": 245760,
+      "note": "默认。长上下文强(26万),视觉可用。思考通道有重复问题,路由已按需关闭思考。",
+      "weights_size": "23G",
+      "thinking": "arith_only"
+    },
+    {
+      "id": "qwen38-27b-abliterated-awq-mtp",
+      "unit": "qwen38-27b-abliterated-awq-mtp-vllm.service",
+      "label": "Qwen3.8 27B abliterated AWQ",
+      "size": "27B",
+      "quant": "AWQ Int4 (compressed-tensors)",
+      "weights": "/home/yi/models/Qwen3.8-27B-abliterated-AWQ-MTP",
+      "context": 131072,
+      "hermes_context": 122880,
+      "note": "低拒答 AWQ-MTP 版。2026-08-28 上线,替换 huihui-qwen36 同参数配置(量化格式不同,须用 compressed-tensors)。",
+      "weights_size": "19G",
+      "thinking": "always"
+    },
+    {
+      "id": "huihui-qwen38-27b-abliterated-fp8",
+      "unit": "qwen38-27b-uncensored-fp8-vllm.service",
+      "label": "Qwen3.8 27B abliterated",
+      "size": "27B",
+      "quant": "FP8",
+      "weights": "/home/yi/models/Huihui-Qwen3.8-27B-abliterated-FP8",
+      "context": 131072,
+      "hermes_context": 122880,
+      "note": "低拒答。上下文 13万,比 Ornith 短一半。",
+      "weights_size": "35G",
+      "thinking": "always"
+    }
+  ]
+}

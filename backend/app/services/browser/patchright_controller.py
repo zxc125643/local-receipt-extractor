@@ -1,12 +1,10 @@
 import random
+import time
 
 from backend.app.services.browser.base_controller import BaseBrowserController
 
 
 class PatchrightController(BaseBrowserController):
-    """
-    Patchright浏览器控制器
-    """
 
     def launch_browser(self):
         try:
@@ -27,55 +25,70 @@ class PatchrightController(BaseBrowserController):
 
             return p, b
 
-        except Exception as e:
+        except Exception:
             return False, False
 
     def handle_captcha(self, page):
-        frame1 = page.frame_locator('iframe[title="验证质询"]')
-        frame2 = frame1.frame_locator('iframe[style*="display: block"]')
-
-        for _ in range(0, self.max_captcha_retries + 1):
-            page.wait_for_timeout(200)
-            loc = frame2.locator('[aria-label="可访问性挑战"]')
-            box = loc.bounding_box()
-            x = box['x'] + box['width'] / 2 + random.randint(-10, 10)
-            y = box['y'] + box['height'] / 2 + random.randint(-10, 10)
-            page.mouse.click(x, y)
-
-            loc2 = frame2.locator('[aria-label="再次按下"]')
-            box2 = loc2.bounding_box()
-            x = box2['x'] + box2['width'] / 2 + random.randint(-20, 20)
-            y = box2['y'] + box2['height'] / 2 + random.randint(-13, 13)
-            page.mouse.click(x, y)
-
+        for _ in range(self.max_captcha_retries + 2):
             try:
-                page.locator('.draw').wait_for(state="detached")
-                try:
-                    page.locator('[role="status"][aria-label="正在加载..."]').wait_for(timeout=5000)
-                    page.wait_for_timeout(8000)
-                    if page.get_by_text('一些异常活动').count() or page.get_by_text('此站点正在维护，暂时无法使用，请稍后重试。').count() > 0:
-                        return False
-                    elif frame2.locator('[aria-label="可访问性挑战"]').count() > 0:
-                        continue
-                    break
-
-                except Exception:
-                    if page.get_by_text('取消').count() > 0:
-                        break
-                    frame1.get_by_text("请再试一次").wait_for(timeout=15000)
+                frame = self._find_captcha_frame(page)
+                if not frame:
+                    page.wait_for_timeout(2000)
                     continue
 
+                btn = frame.locator('[aria-label="可访问性挑战"], [aria-label*="press"], [aria-label*="按住"]')
+                if btn.count() > 0:
+                    btn.click(timeout=5000)
+                    page.wait_for_timeout(1500)
+
+                hold = frame.locator('[aria-label="再次按下"], [aria-label*="hold"], [aria-label*="按住"]')
+                if hold.count() > 0:
+                    hold.click(timeout=5000)
+                    page.wait_for_timeout(2000)
+
+                page.wait_for_timeout(4000)
+
+                if page.locator('.draw').count() == 0 or page.get_by_text("取消").count() > 0:
+                    return True
+
             except Exception:
-                if page.get_by_text('取消').count() > 0:
-                    break
-                return False
-        else:
-            return False
+                page.wait_for_timeout(2000)
+
+            try:
+                page.get_by_text("请再试一次").wait_for(timeout=8000)
+            except Exception:
+                if page.get_by_text("取消").count() > 0 or page.locator('.draw').count() == 0:
+                    return True
 
         return True
 
+    def _find_captcha_frame(self, page):
+        selectors = [
+            'iframe[title="验证质询"]',
+            'iframe[title*="captcha"]',
+            'iframe[title*="challenge"]',
+            'iframe[id="enforcementFrame"]',
+            'iframe[src*="captcha"]',
+        ]
+        for sel in selectors:
+            frames = page.frame_locator(sel)
+            try:
+                inner = frames.frame_locator('iframe')
+                if inner.count() > 0:
+                    return inner
+            except Exception:
+                pass
+            try:
+                if frames.count() > 0:
+                    return frames
+            except Exception:
+                pass
+        return None
+
     def get_thread_page(self):
         browser = self.get_thread_browser()
+        if not browser:
+            raise RuntimeError("Failed to launch browser")
         context = browser.new_context()
         return context.new_page()
 

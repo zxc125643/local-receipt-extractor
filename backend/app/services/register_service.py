@@ -9,12 +9,16 @@ from sqlalchemy.orm import Session
 
 from backend.app.db.database import SessionLocal
 from backend.app.db.models import Account, AppSettings, ProxyPool, RegisterTask
+from backend.app.schemas.settings import SmsSettings
 from backend.app.schemas.register import RegisterConfig, RegisterProgress
+from backend.app.services.browser.bitbrowser_controller import BitBrowserController
 from backend.app.services.browser.patchright_controller import PatchrightController
 from backend.app.services.browser.playwright_controller import PlaywrightController
 from backend.app.services.browser.utils import generate_strong_password, random_email
 from backend.app.services.event_bus import EventBus
+from backend.app.core.config import get_settings
 from backend.app.services.secret_store import PlaintextSecretStore
+from backend.app.services.sms_provider import SmsConfig, SmsService
 
 secret_store = PlaintextSecretStore()
 
@@ -96,7 +100,8 @@ class RegisterService:
         self,
         config: RegisterConfig,
         proxy: str | None,
-        oauth2_settings: dict
+        oauth2_settings: dict,
+        sms_service=None
     ) -> tuple[bool, str, dict[str, Any]]:
         """
         执行单个注册流程
@@ -105,10 +110,13 @@ class RegisterService:
             "bot_protection_wait": config.bot_protection_wait,
             "max_captcha_retries": config.max_captcha_retries,
             "enable_oauth2": config.enable_oauth2,
-            "proxy": proxy or ""
+            "proxy": proxy or get_settings().clash_proxy,
+            "sms_service": sms_service,
         }
 
-        if config.browser == "patchright":
+        if config.browser == "bitbrowser":
+            controller = BitBrowserController(browser_config)
+        elif config.browser == "patchright":
             controller = PatchrightController(browser_config)
         else:
             controller = PlaywrightController(browser_config)
@@ -129,7 +137,7 @@ class RegisterService:
 
             if config.enable_oauth2 and oauth2_settings.get("client_id"):
                 token_result = self._get_oauth2_token(
-                    page, email, oauth2_settings
+                    page, email, oauth2_settings, password
                 )
                 if token_result:
                     refresh_token, client_id = token_result
@@ -141,7 +149,11 @@ class RegisterService:
                     refresh_token
                 )
 
-            return True, "注册成功", {
+            message = "注册成功"
+            if config.enable_oauth2 and not refresh_token:
+                message = "注册成功，但OAuth2 Token获取失败"
+
+            return True, message, {
                 "email": f"{email}@outlook.com",
                 "password": password
             }
@@ -151,87 +163,131 @@ class RegisterService:
         finally:
             controller.clean_up(page, "done_browser")
 
-    def _get_oauth2_token(self, page, email: str, oauth2_settings: dict) -> tuple[str, str] | None:
+    def _get_oauth2_token(self, page, email: str, oauth2_settings: dict, password: str = "") -> tuple[str, str] | None:
         """
-        获取OAuth2 token
+        OAuth2 authorization code flow (PKCE) for consumer MSA accounts.
+        Uses consumers tenant -> redirects to login.live.com for MSA auth.
         """
-        import base64
-        import hashlib
-        import secrets
-        import string
+        import base64, hashlib, secrets, string
         from urllib.parse import quote, parse_qs
-
         import requests
 
-        def generate_code_verifier(length=128):
-            alphabet = string.ascii_letters + string.digits + '-._~'
-            return ''.join(secrets.choice(alphabet) for _ in range(length))
+        def gen_cv(length=128):
+            return ''.join(secrets.choice(string.ascii_letters + string.digits + '-._~') for _ in range(length))
 
-        def generate_code_challenge(code_verifier):
-            sha256_hash = hashlib.sha256(code_verifier.encode()).digest()
-            return base64.urlsafe_b64encode(sha256_hash).decode().rstrip('=')
+        def gen_cc(cv):
+            return base64.urlsafe_b64encode(hashlib.sha256(cv.encode()).digest()).decode().rstrip('=')
 
         try:
             client_id = oauth2_settings["client_id"]
             redirect_url = oauth2_settings["redirect_url"]
             scopes = oauth2_settings.get("scopes", [])
-
-            code_verifier = generate_code_verifier()
-            code_challenge = generate_code_challenge(code_verifier)
-            scope = ' '.join(scopes)
-
+            cv = gen_cv()
             params = {
-                'client_id': client_id,
-                'response_type': 'code',
-                'redirect_uri': redirect_url,
-                'scope': scope,
-                'response_mode': 'query',
-                'prompt': 'select_account',
-                'code_challenge': code_challenge,
-                'code_challenge_method': 'S256'
+                'client_id': client_id, 'response_type': 'code', 'redirect_uri': redirect_url,
+                'scope': ' '.join(scopes), 'response_mode': 'query', 'prompt': 'consent',
+                'code_challenge': gen_cc(cv), 'code_challenge_method': 'S256',
             }
 
-            url = f"https://login.microsoftonline.com/common/oauth2/v2.0/authorize?{'&'.join(f'{k}={quote(v)}' for k, v in params.items())}"
-            page.goto(url)
+            captured = {"code": None}
 
-            try:
-                page.locator('[name="loginfmt"]').fill(f'{email}@outlook.com', timeout=20000)
-                page.locator('#idSIButton9').click(timeout=7000)
-                page.locator('[data-testid="appConsentPrimaryButton"]').click(timeout=20000)
-            except Exception:
-                pass
+            def handle_redirect(route):
+                u = route.request.url
+                if "code=" in u and "?" in u:
+                    c = parse_qs(u.split("?")[1])
+                    if "code" in c:
+                        captured["code"] = c["code"][0]
+                route.fulfill(body="ok", status=200)
 
-            page.wait_for_timeout(2000)
+            page.route("http://localhost/*", handle_redirect)
 
-            current_url = page.url
-            if 'code=' not in current_url:
+            # Use /consumers/ tenant which redirects to login.live.com for MSA accounts
+            url = "https://login.microsoftonline.com/consumers/oauth2/v2.0/authorize?" + "&".join(f"{k}={quote(v)}" for k, v in params.items())
+            page.goto(url, wait_until="domcontentloaded", timeout=30000)
+            page.wait_for_timeout(5000)
+
+            auth_code = captured["code"]
+
+            # ----- Step 1: fill email on login.live.com (uses #usernameEntry) -----
+            if not auth_code:
+                try:
+                    email_input = page.locator('#usernameEntry')
+                    if email_input.count() > 0:
+                        email_input.first.fill(f"{email}@outlook.com", timeout=8000)
+                        page.wait_for_timeout(1000)
+                        next_btn = page.locator('button[type="submit"]')
+                        if next_btn.count() > 0:
+                            next_btn.first.click(timeout=8000)
+                            page.wait_for_timeout(5000)
+                except Exception:
+                    pass
+
+            # ----- Step 2: fill password on login.live.com -----
+            if not auth_code and password:
+                try:
+                    pw_input = page.locator('#passwordEntry, input[type="password"]')
+                    if pw_input.count() > 0:
+                        pw_input.first.fill(password, timeout=8000)
+                        page.wait_for_timeout(1000)
+                        signin_btn = page.locator('button[type="submit"]')
+                        if signin_btn.count() > 0:
+                            signin_btn.first.click(timeout=8000)
+                            page.wait_for_timeout(5000)
+                except Exception:
+                    pass
+
+            # ----- Step 3: handle "Stay signed in?" prompt ("No" / "Don't show again") -----
+            if not auth_code:
+                try:
+                    for sel in ['input[value="No"]', '#declineButton',
+                                 'button:has-text("No")', 'button:has-text("Don\'t show")']:
+                        btn = page.locator(sel)
+                        if btn.count() > 0:
+                            btn.first.click(timeout=5000)
+                            page.wait_for_timeout(3000)
+                            break
+                except Exception:
+                    pass
+
+            # ----- Step 4: click consent on live.com (may use "Yes" button) -----
+            if not auth_code:
+                try:
+                    for sel in ['[data-testid="appConsentPrimaryButton"]',
+                                 'input[value="Accept"]', 'input[value="接受"]',
+                                 'input[value="Yes"]', 'button:has-text("Yes")',
+                                 'button:has-text("Accept")']:
+                        btn = page.locator(sel)
+                        if btn.count() > 0:
+                            btn.first.click(timeout=8000)
+                            page.wait_for_timeout(4000)
+                            break
+                except Exception:
+                    pass
+
+            # ----- Wait and capture code -----
+            page.wait_for_timeout(5000)
+            auth_code = captured["code"] or auth_code
+            if not auth_code and "code=" in page.url:
+                auth_code = parse_qs(page.url.split("?")[1])["code"][0]
+
+            if not auth_code:
                 return None
 
-            auth_code = parse_qs(current_url.split('?')[1])['code'][0]
-
+            # ----- Exchange code for tokens -----
             token_data = {
-                'client_id': client_id,
-                'code': auth_code,
-                'redirect_uri': redirect_url,
-                'grant_type': 'authorization_code',
-                'code_verifier': code_verifier,
-                'scope': ' '.join(scopes)
+                "client_id": client_id, "code": auth_code, "redirect_uri": redirect_url,
+                "grant_type": "authorization_code", "code_verifier": cv,
+                "scope": " ".join(scopes),
             }
-
-            response = requests.post(
-                'https://login.microsoftonline.com/common/oauth2/v2.0/token',
-                data=token_data,
-                headers={'Content-Type': 'application/x-www-form-urlencoded'},
-                timeout=30
+            resp = requests.post(
+                "https://login.microsoftonline.com/consumers/oauth2/v2.0/token",
+                data=token_data, headers={"Content-Type": "application/x-www-form-urlencoded"}, timeout=30,
             )
-
-            if 'refresh_token' in response.json():
-                tokens = response.json()
-                return tokens['refresh_token'], client_id
-
+            if resp.ok and "refresh_token" in resp.json():
+                return resp.json()["refresh_token"], client_id
             return None
 
-        except Exception:
+        except Exception as e:
             return None
 
     async def start_task(self, config: RegisterConfig) -> int:
@@ -268,8 +324,25 @@ class RegisterService:
             session.commit()
 
         oauth2_settings = {}
+        sms_service = None
         with SessionLocal() as session:
             oauth2_settings = self._get_oauth2_settings(session)
+            settings = session.scalar(select(AppSettings))
+            if settings and settings.sms_api_key:
+                sms_config = SmsConfig(
+                    provider=settings.sms_provider or "5sim",
+                    api_key=settings.sms_api_key,
+                    country=settings.sms_country or "Indonesia",
+                    operator=settings.sms_operator or "any",
+                )
+                try:
+                    sms_service = SmsService(sms_config)
+                    bal = sms_service.get_balance()
+                    self.event_bus.emit("register_progress", {
+                        "type": "sms_balance", "balance": bal
+                    })
+                except Exception as e:
+                    sms_service = None
 
         succeeded = 0
         failed = 0
@@ -281,7 +354,7 @@ class RegisterService:
             with SessionLocal() as session:
                 proxy = self._get_random_proxy(session)
 
-            return self._run_single_register(config, proxy, oauth2_settings)
+            return self._run_single_register(config, proxy, oauth2_settings, sms_service)
 
         # 任务级线程池：整个任务期间复用同一个线程池，减少创建/销毁开销
         with ThreadPoolExecutor(max_workers=config.concurrent_flows) as executor:

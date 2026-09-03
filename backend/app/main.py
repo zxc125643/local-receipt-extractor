@@ -2,19 +2,16 @@ from __future__ import annotations
 
 import asyncio
 from contextlib import asynccontextmanager
-from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
-from fastapi.staticfiles import StaticFiles
 
 from backend.app.api.accounts import router as accounts_router
 from backend.app.api.events import router as events_router
 from backend.app.api.mail import router as mail_router
+from backend.app.api.nurture import router as nurture_router
 from backend.app.api.proxy import router as proxy_router
 from backend.app.api.register import router as register_router
-from backend.app.api.receipts import router as receipts_router
 from backend.app.api.settings import router as settings_router
 from backend.app.core.config import Settings, get_settings
 from backend.app.db.database import configure_database, init_db
@@ -78,17 +75,8 @@ def create_app(settings: Settings | None = None, enable_sync: bool = True) -> Fa
     app.include_router(settings_router)
     app.include_router(proxy_router)
     app.include_router(register_router)
-    app.include_router(receipts_router)
-
-    ui_dist = Path(__file__).resolve().parents[2] / "ui" / "dist"
-    if ui_dist.exists():
-        app.mount("/assets", StaticFiles(directory=ui_dist / "assets"), name="ui-assets")
-
-        @app.get("/{full_path:path}", include_in_schema=False)
-        async def serve_ui(full_path: str):
-            return FileResponse(ui_dist / "index.html")
+    app.include_router(nurture_router)
     return app
 
 
 app = create_app()
-

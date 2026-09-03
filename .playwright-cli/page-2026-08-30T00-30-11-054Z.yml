@@ -1,0 +1,131 @@
+- generic [ref=f2e2]:
+  - banner [ref=f2e3]:
+    - heading "方格志" [level=1] [ref=f2e11]
+    - generic [ref=f2e12]:
+      - button "⌂" [ref=f2e13] [cursor=pointer]
+      - button "⌁" [ref=f2e14] [cursor=pointer]
+      - button "↓" [ref=f2e15] [cursor=pointer]
+  - main [ref=f2e16]:
+    - generic [ref=f2e17]:
+      - generic [ref=f2e18]:
+        - generic [ref=f2e19]:
+          - heading "图片 1" [level=2] [ref=f2e20]
+          - paragraph [ref=f2e21]: 点击素材自动填入下一个空格 · 长按替换当前格 · 电脑可拖动指定位置
+        - generic [ref=f2e22]: 0 / 12 已放置
+      - generic [ref=f2e23]:
+        - generic [ref=f2e24]:
+          - generic [ref=f2e25]: 项目素材
+          - generic [ref=f2e26]:
+            - generic [ref=f2e27]: 共 0 张 · 本页已用 0 张
+            - generic [ref=f2e28] [cursor=pointer]: ＋ 上传
+        - generic [ref=f2e29]: 所有导入图片都会显示在这里，不受框架格子数量限制
+      - generic [ref=f2e32]:
+        - article [ref=f2e33]:
+          - generic [ref=f2e34] [cursor=pointer]:
+            - generic [ref=f2e36]:
+              - generic [ref=f2e37]: ＋
+              - text: 拖入图片
+            - generic [ref=f2e38]: "1"
+          - textbox "第 1 格内容" [ref=f2e39]:
+            - /placeholder: 输入内容…
+        - article [ref=f2e40]:
+          - generic [ref=f2e41] [cursor=pointer]:
+            - generic [ref=f2e43]:
+              - generic [ref=f2e44]: ＋
+              - text: 拖入图片
+            - generic [ref=f2e45]: "2"
+          - textbox "第 2 格内容" [ref=f2e46]:
+            - /placeholder: 输入内容…
+        - article [ref=f2e47]:
+          - generic [ref=f2e48] [cursor=pointer]:
+            - generic [ref=f2e50]:
+              - generic [ref=f2e51]: ＋
+              - text: 拖入图片
+            - generic [ref=f2e52]: "3"
+          - textbox "第 3 格内容" [ref=f2e53]:
+            - /placeholder: 输入内容…
+        - article [ref=f2e54]:
+          - generic [ref=f2e55] [cursor=pointer]:
+            - generic [ref=f2e57]:
+              - generic [ref=f2e58]: ＋
+              - text: 拖入图片
+            - generic [ref=f2e59]: "4"
+          - textbox "第 4 格内容" [ref=f2e60]:
+            - /placeholder: 输入内容…
+        - article [ref=f2e61]:
+          - generic [ref=f2e62] [cursor=pointer]:
+            - generic [ref=f2e64]:
+              - generic [ref=f2e65]: ＋
+              - text: 拖入图片
+            - generic [ref=f2e66]: "5"
+          - textbox "第 5 格内容" [ref=f2e67]:
+            - /placeholder: 输入内容…
+        - article [ref=f2e68]:
+          - generic [ref=f2e69] [cursor=pointer]:
+            - generic [ref=f2e71]:
+              - generic [ref=f2e72]: ＋
+              - text: 拖入图片
+            - generic [ref=f2e73]: "6"
+          - textbox "第 6 格内容" [ref=f2e74]:
+            - /placeholder: 输入内容…
+        - article [ref=f2e75]:
+          - generic [ref=f2e76] [cursor=pointer]:
+            - generic [ref=f2e78]:
+              - generic [ref=f2e79]: ＋
+              - text: 拖入图片
+            - generic [ref=f2e80]: "7"
+          - textbox "第 7 格内容" [ref=f2e81]:
+            - /placeholder: 输入内容…
+        - article [ref=f2e82]:
+          - generic [ref=f2e83] [cursor=pointer]:
+            - generic [ref=f2e85]:
+              - generic [ref=f2e86]: ＋
+              - text: 拖入图片
+            - generic [ref=f2e87]: "8"
+          - textbox "第 8 格内容" [ref=f2e88]:
+            - /placeholder: 输入内容…
+        - article [ref=f2e89]:
+          - generic [ref=f2e90] [cursor=pointer]:
+            - generic [ref=f2e92]:
+              - generic [ref=f2e93]: ＋
+              - text: 拖入图片
+            - generic [ref=f2e94]: "9"
+          - textbox "第 9 格内容" [ref=f2e95]:
+            - /placeholder: 输入内容…
+        - article [ref=f2e96]:
+          - generic [ref=f2e97] [cursor=pointer]:
+            - generic [ref=f2e99]:
+              - generic [ref=f2e100]: ＋
+              - text: 拖入图片
+            - generic [ref=f2e101]: "10"
+          - textbox "第 10 格内容" [ref=f2e102]:
+            - /placeholder: 输入内容…
+        - article [ref=f2e103]:
+          - generic [ref=f2e104] [cursor=pointer]:
+            - generic [ref=f2e106]:
+              - generic [ref=f2e107]: ＋
+              - text: 拖入图片
+            - generic [ref=f2e108]: "11"
+          - textbox "第 11 格内容" [ref=f2e109]:
+            - /placeholder: 输入内容…
+        - article [ref=f2e110]:
+          - generic [ref=f2e111] [cursor=pointer]:
+            - generic [ref=f2e113]:
+              - generic [ref=f2e114]: ＋
+              - text: 拖入图片
+            - generic [ref=f2e115]: "12"
+          - textbox "第 12 格内容" [ref=f2e116]:
+            - /placeholder: 输入内容…
+  - generic [ref=f2e117]:
+    - button "☰ 设置" [ref=f2e118] [cursor=pointer]:
+      - generic [ref=f2e119]: ☰
+      - generic [ref=f2e120]: 设置
+    - generic [ref=f2e121] [cursor=pointer]:
+      - generic [ref=f2e122]: ＋
+      - generic [ref=f2e123]: 上传
+    - button "⌫ 清空 1" [ref=f2e124] [cursor=pointer]:
+      - generic [ref=f2e125]: ⌫
+      - generic [ref=f2e126]: 清空 1
+    - button "↓ 导出" [ref=f2e127] [cursor=pointer]:
+      - generic [ref=f2e128]: ↓
+      - generic [ref=f2e129]: 导出

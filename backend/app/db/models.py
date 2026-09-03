@@ -27,6 +27,11 @@ class Account(Base):
     last_test_status: Mapped[str] = mapped_column(String(24), default="untested", index=True)
     last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     message_count: Mapped[int] = mapped_column(Integer, default=0)
+    nurture_stage: Mapped[int] = mapped_column(Integer, default=0)
+    nurture_next_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    nurture_count: Mapped[int] = mapped_column(Integer, default=0)
+    nurture_status: Mapped[str] = mapped_column(String(16), default="pending")
+
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
 
@@ -118,4 +123,8 @@ class AppSettings(Base):
     oauth2_client_id: Mapped[str] = mapped_column(Text, default="")
     oauth2_redirect_url: Mapped[str] = mapped_column(Text, default="")
     oauth2_scopes: Mapped[str] = mapped_column(Text, default="")
+    sms_provider: Mapped[str] = mapped_column(Text, default="")
+    sms_api_key: Mapped[str] = mapped_column(Text, default="")
+    sms_country: Mapped[str] = mapped_column(Text, default="Indonesia")
+    sms_operator: Mapped[str] = mapped_column(Text, default="any")
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)

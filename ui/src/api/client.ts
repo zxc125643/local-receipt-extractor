@@ -229,11 +229,10 @@ type ReceiptResult = { job_id: string; columns: string[]; rows: Array<Record<str
 
 const wait = (milliseconds: number) => new Promise((resolve) => window.setTimeout(resolve, milliseconds));
 
-export async function processReceiptImages(payload: { columns: string[]; files: File[]; workerCount?: number }, onProgress?: (progress: ReceiptProgress) => void) {
+export async function processReceiptImages(payload: { columns: string[]; files: File[] }, onProgress?: (progress: ReceiptProgress) => void) {
   const runtime = await getRuntimeConfig();
   const formData = new FormData();
   formData.append("columns", JSON.stringify(payload.columns));
-  formData.append("worker_count", String(payload.workerCount ?? 2));
   payload.files.forEach((file) => formData.append("files", file, file.name));
   const response = await fetch(`${runtime.apiBaseUrl}/receipts/process`, {
     method: "POST",

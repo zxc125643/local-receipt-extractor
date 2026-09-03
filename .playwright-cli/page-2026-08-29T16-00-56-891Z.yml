@@ -1,0 +1,127 @@
+- generic [ref=f3e2]:
+  - banner [ref=f3e3]:
+    - heading "方格志" [level=1] [ref=f3e11]
+    - generic [ref=f3e12]:
+      - button "⌂" [ref=f3e13] [cursor=pointer]
+      - button "⌁" [ref=f3e14] [cursor=pointer]
+      - button "↓" [ref=f3e15] [cursor=pointer]
+  - main [ref=f3e16]:
+    - complementary [ref=f3e17]:
+      - generic [ref=f3e18]:
+        - generic [ref=f3e19]:
+          - heading "01 · 选择框架" [level=2] [ref=f3e20]
+          - generic [ref=f3e21]: 4 × 3
+        - generic [ref=f3e22]:
+          - button "3 × 3 九宫格" [ref=f3e23] [cursor=pointer]:
+            - generic [ref=f3e34]: 3 × 3
+            - text: 九宫格
+          - button "4 × 3 横向组图" [ref=f3e35] [cursor=pointer]:
+            - generic [ref=f3e49]: 4 × 3
+            - text: 横向组图
+          - button "3 × 4 纵向组图" [ref=f3e50] [cursor=pointer]:
+            - generic [ref=f3e64]: 3 × 4
+            - text: 纵向组图
+          - button "5 × 5 五五方阵" [ref=f3e65] [cursor=pointer]:
+            - generic [ref=f3e92]: 5 × 5
+            - text: 五五方阵
+        - generic [ref=f3e93]:
+          - generic [ref=f3e94]:
+            - text: 列数
+            - spinbutton "列数" [ref=f3e95]: "4"
+          - generic [ref=f3e96]:
+            - text: 行数
+            - spinbutton "行数" [ref=f3e97]: "3"
+      - generic [ref=f3e98]:
+        - generic [ref=f3e99]:
+          - heading "02 · 添加图片" [level=2] [ref=f3e100]
+          - generic [ref=f3e101]: 可批量
+        - generic [ref=f3e103] [cursor=pointer]:
+          - generic [ref=f3e104]: ＋ 选择多张图片
+          - text: 按文件顺序填入空格，也可拖入单格
+      - generic [ref=f3e105]:
+        - heading "03 · 画布设置" [level=2] [ref=f3e107]
+        - generic [ref=f3e108]:
+          - text: 格间距
+          - generic [ref=f3e109]:
+            - slider "格间距 6 px" [ref=f3e110]: "6"
+            - generic [ref=f3e111]: 6 px
+        - generic [ref=f3e112]:
+          - text: 背景色
+          - textbox "背景色" [ref=f3e113]: "#ffffff"
+        - generic [ref=f3e114]:
+          - text: 导出宽度
+          - combobox "导出宽度" [ref=f3e115]:
+            - option "1080 px" [selected]
+            - option "1440 px"
+            - option "2160 px"
+            - option "3000 px"
+    - generic [ref=f3e116]:
+      - generic [ref=f3e117]:
+        - generic [ref=f3e118]:
+          - heading "拼图画布" [level=2] [ref=f3e119]
+          - paragraph [ref=f3e120]: 点击格子编辑 · 拖动已上传图片可交换位置
+        - generic [ref=f3e121]: 0 / 12 已放置
+      - generic [ref=f3e123]:
+        - generic [ref=f3e124] [cursor=pointer]:
+          - generic [ref=f3e126]:
+            - generic [ref=f3e127]: ＋
+            - text: 放入图片
+          - generic [ref=f3e128]: "1"
+        - generic [ref=f3e129] [cursor=pointer]:
+          - generic [ref=f3e131]:
+            - generic [ref=f3e132]: ＋
+            - text: 放入图片
+          - generic [ref=f3e133]: "2"
+        - generic [ref=f3e134] [cursor=pointer]:
+          - generic [ref=f3e136]:
+            - generic [ref=f3e137]: ＋
+            - text: 放入图片
+          - generic [ref=f3e138]: "3"
+        - generic [ref=f3e139] [cursor=pointer]:
+          - generic [ref=f3e141]:
+            - generic [ref=f3e142]: ＋
+            - text: 放入图片
+          - generic [ref=f3e143]: "4"
+        - generic [ref=f3e144] [cursor=pointer]:
+          - generic [ref=f3e146]:
+            - generic [ref=f3e147]: ＋
+            - text: 放入图片
+          - generic [ref=f3e148]: "5"
+        - generic [ref=f3e149] [cursor=pointer]:
+          - generic [ref=f3e151]:
+            - generic [ref=f3e152]: ＋
+            - text: 放入图片
+          - generic [ref=f3e153]: "6"
+        - generic [ref=f3e154] [cursor=pointer]:
+          - generic [ref=f3e156]:
+            - generic [ref=f3e157]: ＋
+            - text: 放入图片
+          - generic [ref=f3e158]: "7"
+        - generic [ref=f3e159] [cursor=pointer]:
+          - generic [ref=f3e161]:
+            - generic [ref=f3e162]: ＋
+            - text: 放入图片
+          - generic [ref=f3e163]: "8"
+        - generic [ref=f3e164] [cursor=pointer]:
+          - generic [ref=f3e166]:
+            - generic [ref=f3e167]: ＋
+            - text: 放入图片
+          - generic [ref=f3e168]: "9"
+        - generic [ref=f3e169] [cursor=pointer]:
+          - generic [ref=f3e171]:
+            - generic [ref=f3e172]: ＋
+            - text: 放入图片
+          - generic [ref=f3e173]: "10"
+        - generic [ref=f3e174] [cursor=pointer]:
+          - generic [ref=f3e176]:
+            - generic [ref=f3e177]: ＋
+            - text: 放入图片
+          - generic [ref=f3e178]: "11"
+        - generic [ref=f3e179] [cursor=pointer]:
+          - generic [ref=f3e181]:
+            - generic [ref=f3e182]: ＋
+            - text: 放入图片
+          - generic [ref=f3e183]: "12"
+  - generic [ref=f3e184]:
+    - button "编辑当前格" [ref=f3e185] [cursor=pointer]
+    - button "导出拼图" [ref=f3e186] [cursor=pointer]

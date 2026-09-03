@@ -79,7 +79,7 @@ export function ReceiptExtractorPage() {
       {processMutation.isPending && progress ? <div aria-live="polite" className="panel receipt-progress">
         <div className="receipt-progress-heading"><strong>正在识别：{progress.completed} / {progress.total} 张</strong><span>{progress.total ? Math.round((progress.completed / progress.total) * 100) : 0}%</span></div>
         <div aria-valuemax={progress.total} aria-valuemin={0} aria-valuenow={progress.completed} className="receipt-progress-track" role="progressbar"><span style={{ width: `${progress.total ? (progress.completed / progress.total) * 100 : 0}%` }} /></div>
-        <p className="muted-text">{progress.currentFile ? `刚完成：${progress.currentFile}` : "正在准备本地 OCR…"}</p>
+        <p className="muted-text">{progress.currentFile ? (progress.completed ? `刚完成：${progress.currentFile}` : `正在识别：${progress.currentFile}`) : "正在准备本地 OCR…"}</p>
       </div> : null}
 
       {result ? <div className="panel receipt-results">

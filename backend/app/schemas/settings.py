@@ -12,8 +12,13 @@ class OAuth2Settings(BaseModel):
     scopes: list[str]
 
 
+class SmsSettings(BaseModel):
+    provider: str = ""
+    api_key: str = ""
+    country: str = "Indonesia"
+    operator: str = "any"
+
+
 class AppSettingsResponse(BaseModel):
-    """
-    应用设置响应
-    """
     oauth2: OAuth2Settings
+    sms: SmsSettings = SmsSettings()

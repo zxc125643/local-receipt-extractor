@@ -1,0 +1,178 @@
+- generic [ref=f1e2]:
+  - banner [ref=f1e3]:
+    - generic [ref=f1e10]:
+      - heading "方格志" [level=1] [ref=f1e11]
+      - generic [ref=f1e12]: 离线拼图工作台
+    - generic [ref=f1e13]:
+      - button "⌂ 草稿箱" [ref=f1e14] [cursor=pointer]:
+        - text: ⌂
+        - generic [ref=f1e15]: 草稿箱
+      - button "⌁ 保存草稿" [ref=f1e16] [cursor=pointer]:
+        - text: ⌁
+        - generic [ref=f1e17]: 保存草稿
+      - button "↓ 导出拼图" [ref=f1e18] [cursor=pointer]:
+        - text: ↓
+        - generic [ref=f1e19]: 导出拼图
+  - main [ref=f1e20]:
+    - complementary [ref=f1e21]:
+      - generic [ref=f1e22]:
+        - generic [ref=f1e23]:
+          - heading "01 · 选择框架" [level=2] [ref=f1e24]
+          - generic [ref=f1e25]: 4 × 3
+        - generic [ref=f1e26]:
+          - button "3 × 3 九宫格" [ref=f1e27] [cursor=pointer]:
+            - generic [ref=f1e38]: 3 × 3
+            - text: 九宫格
+          - button "4 × 3 横向组图" [ref=f1e39] [cursor=pointer]:
+            - generic [ref=f1e53]: 4 × 3
+            - text: 横向组图
+          - button "3 × 4 纵向组图" [ref=f1e54] [cursor=pointer]:
+            - generic [ref=f1e68]: 3 × 4
+            - text: 纵向组图
+          - button "5 × 5 五五方阵" [ref=f1e69] [cursor=pointer]:
+            - generic [ref=f1e96]: 5 × 5
+            - text: 五五方阵
+        - generic [ref=f1e97]:
+          - generic [ref=f1e98]:
+            - text: 列数
+            - spinbutton "列数" [ref=f1e99]: "4"
+          - generic [ref=f1e100]:
+            - text: 行数
+            - spinbutton "行数" [ref=f1e101]: "3"
+      - generic [ref=f1e102]:
+        - generic [ref=f1e103]:
+          - heading "02 · 添加图片" [level=2] [ref=f1e104]
+          - generic [ref=f1e105]: 可批量
+        - generic [ref=f1e107] [cursor=pointer]:
+          - generic [ref=f1e108]: ＋ 选择多张图片
+          - text: 按文件顺序填入空格，也可拖入单格
+      - generic [ref=f1e109]:
+        - heading "03 · 画布设置" [level=2] [ref=f1e111]
+        - generic [ref=f1e112]:
+          - text: 格间距
+          - generic [ref=f1e113]:
+            - slider "格间距 6 px" [ref=f1e114]: "6"
+            - generic [ref=f1e115]: 6 px
+        - generic [ref=f1e116]:
+          - text: 背景色
+          - textbox "背景色" [ref=f1e117]: "#ffffff"
+        - generic [ref=f1e118]:
+          - text: 导出宽度
+          - combobox "导出宽度" [ref=f1e119]:
+            - option "1080 px" [selected]
+            - option "1440 px"
+            - option "2160 px"
+            - option "3000 px"
+    - generic [ref=f1e120]:
+      - generic [ref=f1e121]:
+        - generic [ref=f1e122]:
+          - heading "拼图大框" [level=2] [ref=f1e123]
+          - paragraph [ref=f1e124]: 点击每个图片框选择图片 · 在小框底部直接输入内容
+        - generic [ref=f1e125]: 0 / 12 已放置
+      - generic [ref=f1e127]:
+        - article [ref=f1e128]:
+          - generic [ref=f1e129] [cursor=pointer]:
+            - generic [ref=f1e131]:
+              - generic [ref=f1e132]: ＋
+              - text: 选择图片
+            - generic [ref=f1e133]: "1"
+          - textbox "第 1 格内容" [ref=f1e134]:
+            - /placeholder: 输入内容…
+        - article [ref=f1e135]:
+          - generic [ref=f1e136] [cursor=pointer]:
+            - generic [ref=f1e138]:
+              - generic [ref=f1e139]: ＋
+              - text: 选择图片
+            - generic [ref=f1e140]: "2"
+          - textbox "第 2 格内容" [ref=f1e141]:
+            - /placeholder: 输入内容…
+        - article [ref=f1e142]:
+          - generic [ref=f1e143] [cursor=pointer]:
+            - generic [ref=f1e145]:
+              - generic [ref=f1e146]: ＋
+              - text: 选择图片
+            - generic [ref=f1e147]: "3"
+          - textbox "第 3 格内容" [ref=f1e148]:
+            - /placeholder: 输入内容…
+        - article [ref=f1e149]:
+          - generic [ref=f1e150] [cursor=pointer]:
+            - generic [ref=f1e152]:
+              - generic [ref=f1e153]: ＋
+              - text: 选择图片
+            - generic [ref=f1e154]: "4"
+          - textbox "第 4 格内容" [ref=f1e155]:
+            - /placeholder: 输入内容…
+        - article [ref=f1e156]:
+          - generic [ref=f1e157] [cursor=pointer]:
+            - generic [ref=f1e159]:
+              - generic [ref=f1e160]: ＋
+              - text: 选择图片
+            - generic [ref=f1e161]: "5"
+          - textbox "第 5 格内容" [ref=f1e162]:
+            - /placeholder: 输入内容…
+        - article [ref=f1e163]:
+          - generic [ref=f1e164] [cursor=pointer]:
+            - generic [ref=f1e166]:
+              - generic [ref=f1e167]: ＋
+              - text: 选择图片
+            - generic [ref=f1e168]: "6"
+          - textbox "第 6 格内容" [ref=f1e169]:
+            - /placeholder: 输入内容…
+        - article [ref=f1e170]:
+          - generic [ref=f1e171] [cursor=pointer]:
+            - generic [ref=f1e173]:
+              - generic [ref=f1e174]: ＋
+              - text: 选择图片
+            - generic [ref=f1e175]: "7"
+          - textbox "第 7 格内容" [ref=f1e176]:
+            - /placeholder: 输入内容…
+        - article [ref=f1e177]:
+          - generic [ref=f1e178] [cursor=pointer]:
+            - generic [ref=f1e180]:
+              - generic [ref=f1e181]: ＋
+              - text: 选择图片
+            - generic [ref=f1e182]: "8"
+          - textbox "第 8 格内容" [ref=f1e183]:
+            - /placeholder: 输入内容…
+        - article [ref=f1e184]:
+          - generic [ref=f1e185] [cursor=pointer]:
+            - generic [ref=f1e187]:
+              - generic [ref=f1e188]: ＋
+              - text: 选择图片
+            - generic [ref=f1e189]: "9"
+          - textbox "第 9 格内容" [ref=f1e190]:
+            - /placeholder: 输入内容…
+        - article [ref=f1e191]:
+          - generic [ref=f1e192] [cursor=pointer]:
+            - generic [ref=f1e194]:
+              - generic [ref=f1e195]: ＋
+              - text: 选择图片
+            - generic [ref=f1e196]: "10"
+          - textbox "第 10 格内容" [ref=f1e197]:
+            - /placeholder: 输入内容…
+        - article [ref=f1e198]:
+          - generic [ref=f1e199] [cursor=pointer]:
+            - generic [ref=f1e201]:
+              - generic [ref=f1e202]: ＋
+              - text: 选择图片
+            - generic [ref=f1e203]: "11"
+          - textbox "第 11 格内容" [ref=f1e204]:
+            - /placeholder: 输入内容…
+        - article [ref=f1e205]:
+          - generic [ref=f1e206] [cursor=pointer]:
+            - generic [ref=f1e208]:
+              - generic [ref=f1e209]: ＋
+              - text: 选择图片
+            - generic [ref=f1e210]: "12"
+          - textbox "第 12 格内容" [ref=f1e211]:
+            - /placeholder: 输入内容…
+    - complementary [ref=f1e212]:
+      - generic [ref=f1e213]:
+        - generic [ref=f1e214]:
+          - heading "当前小框" [level=2] [ref=f1e215]
+          - generic [ref=f1e216]: 第 1 格
+        - generic [ref=f1e217]: 尚未添加图片
+        - generic [ref=f1e218]:
+          - button "替换图片" [ref=f1e219] [cursor=pointer]
+          - button "清空格子" [ref=f1e220] [cursor=pointer]
+      - generic [ref=f1e221]: 操作提示大框内的每个小框都可以单独选图，底部输入框对应当前图片。拖动小框可以让图片和文字一起换位。

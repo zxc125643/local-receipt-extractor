@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import time
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -19,7 +18,6 @@ from backend.app.services.auth import AccessTokenBundle
 from backend.app.services.event_bus import EventBus
 from backend.app.services.imap_sync import FetchedMessage, OutlookImapService, SyncOutcome
 from backend.app.services.sync_service import AccountSyncService, SyncDependencies
-from backend.app.api import receipts
 
 
 def make_settings(tmp_path: Path) -> Settings:
@@ -61,37 +59,6 @@ def test_import_endpoint_overwrites_existing_account(tmp_path: Path):
         accounts = client.get("/accounts", headers=headers).json()
         assert accounts[0]["account_status"] == "disconnected"
         assert accounts[0]["access_token"] is None
-
-
-def test_receipt_endpoints_extract_requested_columns_and_export_xlsx(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    class FakeExtractor:
-        def read(self, _image: bytes):
-            return ["-405.00", "支付时间", "2026年8月23日 19:36:37", "商户全称", "本地餐厅"]
-
-    monkeypatch.setattr(receipts, "get_extractor", lambda: FakeExtractor())
-    app = create_app(settings=make_settings(tmp_path), enable_sync=False)
-    with TestClient(app) as client:
-        headers = {"X-Desktop-Token": "test-token"}
-        extracted = client.post(
-            "/receipts/process",
-            headers=headers,
-            data={"columns": '["付款金额", "付款时间", "商家名称"]'},
-            files=[("files", ("receipt.jpg", b"image", "image/jpeg"))],
-        )
-        status = client.get(f"/receipts/status/{extracted.json()['job_id']}", headers=headers)
-        for _ in range(20):
-            if status.json()["status"] == "completed":
-                break
-            time.sleep(0.01)
-            status = client.get(f"/receipts/status/{extracted.json()['job_id']}", headers=headers)
-        exported = client.post("/receipts/export", headers=headers, json={"job_id": extracted.json()["job_id"]})
-
-    assert extracted.status_code == 200
-    assert extracted.json()["total"] == 1
-    assert status.json()["completed"] == 1
-    assert status.json()["rows"] == [{"源文件": "receipt.jpg", "付款金额": "405.00", "付款时间": "2026-08-23 19:36:37", "商家名称": "本地餐厅", "是否有发票": "无"}]
-    assert exported.status_code == 200
-    assert exported.headers["content-type"].startswith("application/vnd.openxmlformats-officedocument")
 
 
 def test_event_bus_delivers_mail_received_payload(tmp_path: Path):

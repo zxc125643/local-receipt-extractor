@@ -1,0 +1,18 @@
+[Unit]
+Description=Huihui Qwen3.6 27B Abliterated AWQ MTP vLLM Service
+After=network-online.target
+Wants=network-online.target
+Conflicts=qwen38-27b-q8-llama.service qwen38-27b-q6-llama.service qwen38-27b-q4-llama.service qwen38-27b-q6-vllm.service qwen38-27b-uncensored-fp8-vllm.service ornith-a3b-vllm.service vllm-2080ti.service
+
+[Service]
+Type=simple
+WorkingDirectory=/home/yi/vLLM-2080Ti-Definitive
+ExecStartPre=/bin/bash -c 'for i in $(seq 1 40); do u=$(nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits | paste -sd+ | bc); if [ "$u" -lt 1500 ]; then exit 0; fi; sleep 3; done; echo "VRAM still held after 120s, starting anyway"; exit 0'
+ExecStart=/home/yi/start-huihui-qwen36-awq-vllm.sh
+Restart=on-failure
+RestartSec=8
+TimeoutStartSec=1200
+TimeoutStopSec=300
+
+[Install]
+WantedBy=default.target

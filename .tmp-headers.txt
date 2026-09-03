@@ -1,0 +1,17 @@
+HTTP/1.1 200 Connection established
+
+HTTP/1.1 405 Method Not Allowed
+Date: Fri, 31 Jul 2026 02:02:23 GMT
+Content-Type: application/json
+Content-Length: 134
+Connection: keep-alive
+CF-Ray: a23905469a52d510-NRT
+CF-Cache-Status: DYNAMIC
+Server: cloudflare
+cf-auditlog-id: 019fb5e8-8829-7b10-870d-08d89e1bebdf
+Ratelimit: "default";r=1199;t=1
+Ratelimit-Policy: "default";q=1200;w=300
+api-version: 2026-09-26.epoch
+Set-Cookie: __cflb=04dTob1Z8hkaUxg6DoSzyuYaXLsKuLfkVHQoxcFWo7; HttpOnly; SameSite=None; Secure; Path=/; Expires=Fri, 31 Jul 2026 04:32:24 GMT
+set-cookie: __cf_bm=b1LWMKN5PtxJxXedQgo_WgWMwRZyyd6bAKbJm9hBu2o-1785463343.1315885-1.0.1.1-1.ndGufaRTgOZ_9pGFlUwXxQIyNmfn0t0aqs5Z3LPkebWSaQTzjMAd7hM1HUIN5.URyBoovsIfXq77tV9HA6ToGf79.0pmvs23AEHn4wp6PiKK0DTZT2_UolheS7wC.k; HttpOnly; SameSite=None; Secure; Path=/; Domain=api.cloudflare.com; Expires=Fri, 31 Jul 2026 02:32:23 GMT
+

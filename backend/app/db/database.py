@@ -66,6 +66,8 @@ def migrate_accounts_table() -> None:
                         """
                     )
                 )
+        migrate_accounts_nurture()
+        migrate_app_settings()
         return
 
     with engine.begin() as connection:
@@ -83,6 +85,45 @@ def migrate_accounts_table() -> None:
                 """
             )
         )
+    migrate_accounts_nurture()
+    migrate_app_settings()
+
+
+def migrate_accounts_nurture() -> None:
+    inspector = inspect(engine)
+    try:
+        cols = {column["name"] for column in inspector.get_columns("accounts")}
+        stmts = []
+        for col in ("nurture_stage", "nurture_next_at", "nurture_count", "nurture_status"):
+            if col not in cols:
+                if col in ("nurture_stage", "nurture_count"):
+                    stmts.append(f"ALTER TABLE accounts ADD COLUMN {col} INTEGER DEFAULT 0")
+                elif col == "nurture_next_at":
+                    stmts.append(f"ALTER TABLE accounts ADD COLUMN {col} DATETIME")
+                else:
+                    stmts.append(f"ALTER TABLE accounts ADD COLUMN {col} VARCHAR(16) DEFAULT 'pending'")
+        if stmts:
+            with engine.begin() as conn:
+                for s in stmts:
+                    conn.execute(text(s))
+    except Exception:
+        pass
+
+
+def migrate_app_settings() -> None:
+    inspector = inspect(engine)
+    try:
+        cols = {column["name"] for column in inspector.get_columns("app_settings")}
+        stmts = []
+        for col in ("sms_provider", "sms_api_key", "sms_country", "sms_operator"):
+            if col not in cols:
+                stmts.append(f"ALTER TABLE app_settings ADD COLUMN {col} TEXT DEFAULT ''")
+        if stmts:
+            with engine.begin() as conn:
+                for s in stmts:
+                    conn.execute(text(s))
+    except Exception:
+        pass
 
 
 def get_session() -> Generator[Session, None, None]:

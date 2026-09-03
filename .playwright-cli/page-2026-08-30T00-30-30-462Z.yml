@@ -1,0 +1,256 @@
+- generic [ref=f2e1]:
+  - generic [ref=f2e2]:
+    - banner [ref=f2e3]:
+      - heading "方格志" [level=1] [ref=f2e11]
+      - generic [ref=f2e12]:
+        - button "⌂" [ref=f2e13] [cursor=pointer]
+        - button "⌁" [ref=f2e14] [cursor=pointer]
+        - button "↓" [ref=f2e15] [cursor=pointer]
+    - main [ref=f2e16]:
+      - complementary [ref=f2e240]:
+        - generic [ref=f2e241]:
+          - generic [ref=f2e242]: 项目与画布设置
+          - button "关闭设置" [active] [ref=f2e243] [cursor=pointer]: ×
+        - generic [ref=f2e244]:
+          - generic [ref=f2e245]:
+            - heading "01 · 项目信息" [level=2] [ref=f2e246]
+            - generic [ref=f2e247]: 整套保存
+          - generic [ref=f2e248]:
+            - text: 项目名称
+            - textbox "项目名称" [ref=f2e249]:
+              - /placeholder: 输入项目名称
+              - text: 未命名项目
+          - generic [ref=f2e250]:
+            - text: 项目说明
+            - textbox "项目说明" [ref=f2e251]:
+              - /placeholder: 填写整个项目的用途或说明…
+        - generic [ref=f2e252]:
+          - generic [ref=f2e253]:
+            - heading "02 · 图片页" [level=2] [ref=f2e254]
+            - button "＋ 新建" [ref=f2e255] [cursor=pointer]
+          - button "1 图片 1 2 张素材 · 3 × 3" [ref=f2e257] [cursor=pointer]:
+            - generic [ref=f2e258]: "1"
+            - generic [ref=f2e259]:
+              - generic [ref=f2e260]: 图片 1
+              - generic [ref=f2e261]: 2 张素材 · 3 × 3
+          - generic [ref=f2e262]:
+            - text: 当前图片名称
+            - textbox "当前图片名称" [ref=f2e263]:
+              - /placeholder: 例如：产品正面展示
+              - text: 图片 1
+          - generic [ref=f2e264]:
+            - text: 当前图片描述
+            - textbox "当前图片描述" [ref=f2e265]:
+              - /placeholder: 填写这张成品图的描述…
+        - generic [ref=f2e266]:
+          - generic [ref=f2e267]:
+            - heading "03 · 选择框架" [level=2] [ref=f2e268]
+            - generic [ref=f2e269]: 3 × 3
+          - generic [ref=f2e270]:
+            - button "3 × 3 九宫格" [ref=f2e271] [cursor=pointer]:
+              - generic [ref=f2e282]: 3 × 3
+              - text: 九宫格
+            - button "4 × 3 横向组图" [ref=f2e283] [cursor=pointer]:
+              - generic [ref=f2e297]: 4 × 3
+              - text: 横向组图
+            - button "3 × 4 纵向组图" [ref=f2e298] [cursor=pointer]:
+              - generic [ref=f2e312]: 3 × 4
+              - text: 纵向组图
+            - button "5 × 5 五五方阵" [ref=f2e313] [cursor=pointer]:
+              - generic [ref=f2e340]: 5 × 5
+              - text: 五五方阵
+          - generic [ref=f2e341]:
+            - generic [ref=f2e342]:
+              - text: 列数
+              - spinbutton "列数" [ref=f2e343]: "3"
+            - generic [ref=f2e344]:
+              - text: 行数
+              - spinbutton "行数" [ref=f2e345]: "3"
+        - generic [ref=f2e346]:
+          - generic [ref=f2e347]:
+            - heading "04 · 项目素材库" [level=2] [ref=f2e348]
+            - generic [ref=f2e349]: 13 张
+          - generic [ref=f2e351] [cursor=pointer]:
+            - generic [ref=f2e352]: ＋ 上传或拖入图片
+            - text: 可一次选择多张，全部进入素材库
+          - generic [ref=f2e353]: 本次选择 1 张 · 成功导入 1 张
+        - generic [ref=f2e354]:
+          - heading "05 · 画布设置" [level=2] [ref=f2e356]
+          - generic [ref=f2e357]:
+            - text: 格间距
+            - generic [ref=f2e358]:
+              - slider "格间距 6 px" [ref=f2e359]: "6"
+              - generic [ref=f2e360]: 6 px
+          - generic [ref=f2e361]:
+            - text: 背景色
+            - textbox "背景色" [ref=f2e362]: "#ffffff"
+          - generic [ref=f2e363]:
+            - text: 画布预览缩放
+            - generic [ref=f2e364]:
+              - slider "画布预览缩放 100%" [ref=f2e365]: "100"
+              - generic [ref=f2e366]: 100%
+          - generic [ref=f2e367]:
+            - generic [ref=f2e368]: 小红书高清 PNG
+            - text: 固定宽度 1080 px，无需设置
+      - button "关闭设置" [ref=f2e369]
+      - generic [ref=f2e17]:
+        - generic [ref=f2e18]:
+          - generic [ref=f2e19]:
+            - heading "图片 1" [level=2] [ref=f2e20]
+            - paragraph [ref=f2e21]: 点击素材自动填入下一个空格 · 长按替换当前格 · 电脑可拖动指定位置
+          - generic [ref=f2e22]: 2 / 9 已放置
+        - generic [ref=f2e23]:
+          - generic [ref=f2e24]:
+            - generic [ref=f2e25]: 项目素材
+            - generic [ref=f2e26]:
+              - generic [ref=f2e27]: 共 13 张 · 本页已用 2 张
+              - generic [ref=f2e28] [cursor=pointer]: ＋ 上传
+          - generic [ref=f2e29]:
+            - generic "点击自动填空，长按替换当前格" [ref=f2e130]:
+              - generic [ref=f2e131]:
+                - img "素材1.svg"
+                - generic [ref=f2e132]: 已用
+              - generic [ref=f2e133]: 素材1.svg
+            - generic "点击自动填空，长按替换当前格" [ref=f2e134]:
+              - generic [ref=f2e135]:
+                - img "素材2.svg"
+                - generic [ref=f2e136]: 已用
+              - generic [ref=f2e137]: 素材2.svg
+            - generic "点击自动填空，长按替换当前格" [ref=f2e138]:
+              - generic [ref=f2e139]:
+                - img "素材3.svg"
+                - generic [ref=f2e140]: 未使用
+              - generic [ref=f2e141]: 素材3.svg
+            - generic "点击自动填空，长按替换当前格" [ref=f2e142]:
+              - generic [ref=f2e143]:
+                - img "素材4.svg"
+                - generic [ref=f2e144]: 未使用
+              - generic [ref=f2e145]: 素材4.svg
+            - generic "点击自动填空，长按替换当前格" [ref=f2e146]:
+              - generic [ref=f2e147]:
+                - img "素材5.svg"
+                - generic [ref=f2e148]: 未使用
+              - generic [ref=f2e149]: 素材5.svg
+            - generic "点击自动填空，长按替换当前格" [ref=f2e150]:
+              - generic [ref=f2e151]:
+                - img "素材6.svg"
+                - generic [ref=f2e152]: 未使用
+              - generic [ref=f2e153]: 素材6.svg
+            - generic "点击自动填空，长按替换当前格" [ref=f2e154]:
+              - generic [ref=f2e155]:
+                - img "素材7.svg"
+                - generic [ref=f2e156]: 未使用
+              - generic [ref=f2e157]: 素材7.svg
+            - generic "点击自动填空，长按替换当前格" [ref=f2e158]:
+              - generic [ref=f2e159]:
+                - img "素材8.svg"
+                - generic [ref=f2e160]: 未使用
+              - generic [ref=f2e161]: 素材8.svg
+            - generic "点击自动填空，长按替换当前格" [ref=f2e162]:
+              - generic [ref=f2e163]:
+                - img "素材9.svg"
+                - generic [ref=f2e164]: 未使用
+              - generic [ref=f2e165]: 素材9.svg
+            - generic "点击自动填空，长按替换当前格" [ref=f2e166]:
+              - generic [ref=f2e167]:
+                - img "素材10.svg"
+                - generic [ref=f2e168]: 未使用
+              - generic [ref=f2e169]: 素材10.svg
+            - generic "点击自动填空，长按替换当前格" [ref=f2e170]:
+              - generic [ref=f2e171]:
+                - img "素材11.svg"
+                - generic [ref=f2e172]: 未使用
+              - generic [ref=f2e173]: 素材11.svg
+            - generic "点击自动填空，长按替换当前格" [ref=f2e174]:
+              - generic [ref=f2e175]:
+                - img "素材12.svg"
+                - generic [ref=f2e176]: 未使用
+              - generic [ref=f2e177]: 素材12.svg
+            - generic "点击自动填空，长按替换当前格" [ref=f2e178]:
+              - generic [ref=f2e179]:
+                - img "page_01.png"
+                - generic [ref=f2e180]: 未使用
+              - generic [ref=f2e181]: page_01.png
+        - generic [ref=f2e32]:
+          - article [ref=f2e182]:
+            - generic [ref=f2e183] [cursor=pointer]:
+              - img "素材1.svg"
+              - generic [ref=f2e184]: "1"
+            - textbox "第 1 格内容" [ref=f2e185]:
+              - /placeholder: 输入内容…
+          - article [ref=f2e186]:
+            - generic [ref=f2e187] [cursor=pointer]:
+              - generic [ref=f2e189]:
+                - generic [ref=f2e190]: ＋
+                - text: 拖入图片
+              - generic [ref=f2e191]: "2"
+            - textbox "第 2 格内容" [ref=f2e192]:
+              - /placeholder: 输入内容…
+          - article [ref=f2e193]:
+            - generic [ref=f2e194] [cursor=pointer]:
+              - generic [ref=f2e196]:
+                - generic [ref=f2e197]: ＋
+                - text: 拖入图片
+              - generic [ref=f2e198]: "3"
+            - textbox "第 3 格内容" [ref=f2e199]:
+              - /placeholder: 输入内容…
+          - article [ref=f2e200]:
+            - generic [ref=f2e201] [cursor=pointer]:
+              - generic [ref=f2e203]:
+                - generic [ref=f2e204]: ＋
+                - text: 拖入图片
+              - generic [ref=f2e205]: "4"
+            - textbox "第 4 格内容" [ref=f2e206]:
+              - /placeholder: 输入内容…
+          - article [ref=f2e207]:
+            - generic [ref=f2e208] [cursor=pointer]:
+              - img "素材2.svg"
+              - generic [ref=f2e209]: "5"
+            - textbox "第 5 格内容" [ref=f2e210]:
+              - /placeholder: 输入内容…
+          - article [ref=f2e211]:
+            - generic [ref=f2e212] [cursor=pointer]:
+              - generic [ref=f2e214]:
+                - generic [ref=f2e215]: ＋
+                - text: 拖入图片
+              - generic [ref=f2e216]: "6"
+            - textbox "第 6 格内容" [ref=f2e217]:
+              - /placeholder: 输入内容…
+          - article [ref=f2e218]:
+            - generic [ref=f2e219] [cursor=pointer]:
+              - generic [ref=f2e221]:
+                - generic [ref=f2e222]: ＋
+                - text: 拖入图片
+              - generic [ref=f2e223]: "7"
+            - textbox "第 7 格内容" [ref=f2e224]:
+              - /placeholder: 输入内容…
+          - article [ref=f2e225]:
+            - generic [ref=f2e226] [cursor=pointer]:
+              - generic [ref=f2e228]:
+                - generic [ref=f2e229]: ＋
+                - text: 拖入图片
+              - generic [ref=f2e230]: "8"
+            - textbox "第 8 格内容" [ref=f2e231]:
+              - /placeholder: 输入内容…
+          - article [ref=f2e232]:
+            - generic [ref=f2e233] [cursor=pointer]:
+              - generic [ref=f2e235]:
+                - generic [ref=f2e236]: ＋
+                - text: 拖入图片
+              - generic [ref=f2e237]: "9"
+            - textbox "第 9 格内容" [ref=f2e238]:
+              - /placeholder: 输入内容…
+    - generic [ref=f2e117]:
+      - button "☰ 设置" [ref=f2e118] [cursor=pointer]:
+        - generic [ref=f2e119]: ☰
+        - generic [ref=f2e120]: 设置
+      - generic [ref=f2e121] [cursor=pointer]:
+        - generic [ref=f2e122]: ＋
+        - generic [ref=f2e123]: 上传
+      - button "⌫ 清空 5" [ref=f2e239] [cursor=pointer]:
+        - generic [ref=f2e125]: ⌫
+        - generic [ref=f2e126]: 清空 5
+      - button "↓ 导出" [ref=f2e127] [cursor=pointer]:
+        - generic [ref=f2e128]: ↓
+        - generic [ref=f2e129]: 导出
+  - generic: 已按小红书 1080px 高清规格导出

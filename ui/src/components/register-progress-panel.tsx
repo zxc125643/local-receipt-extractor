@@ -19,7 +19,8 @@ export function RegisterProgressPanel({
   const statusQuery = useQuery({
     queryKey: ["register-status", taskId],
     queryFn: () => getRegisterStatus(taskId),
-    refetchInterval: (data) => {
+    refetchInterval: (query) => {
+      const data = query.state.data;
       if (data?.status === "completed" || data?.status === "cancelled") {
         return false;
       }

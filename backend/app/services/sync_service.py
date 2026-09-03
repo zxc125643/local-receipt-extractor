@@ -79,6 +79,15 @@ class AccountSyncService:
                 )
 
                 token_bundle = await self._get_valid_access_token(account)
+                if token_bundle is None:
+                    account.last_test_status = "skipped"
+                    account.account_status = "disconnected"
+                    account.last_error = "No OAuth2 tokens (client_id/refresh_token not configured)"
+                    session.commit()
+                    fail_payload = self._build_status_payload(account, "test", "skipped", "No OAuth2 tokens")
+                    await self.event_bus.publish("account_status_changed", fail_payload)
+                    return AccountTestResult(id=account_id, status="skipped", message="No OAuth2 tokens", tested_at=datetime.utcnow())
+
                 account.access_token = token_bundle.access_token
                 account.access_token_expires_at = token_bundle.expires_at
                 result = await self.imap_service.test_connection(account, token_bundle.access_token)
@@ -165,6 +174,8 @@ class AccountSyncService:
                     self._build_status_payload(account, "sync", "connecting")
                 )
             token_bundle = await self._get_valid_access_token(account)
+            if token_bundle is None:
+                raise RuntimeError("No OAuth2 tokens (client_id/refresh_token not configured)")
             account.access_token = token_bundle.access_token
             account.access_token_expires_at = token_bundle.expires_at
             session.commit()
@@ -274,7 +285,9 @@ class AccountSyncService:
         session.flush()
         return mailbox_state
 
-    async def _get_valid_access_token(self, account: Account) -> AccessTokenBundle:
+    async def _get_valid_access_token(self, account: Account) -> AccessTokenBundle | None:
+        if not account.client_id or not account.refresh_token:
+            return None
         expires_at = account.access_token_expires_at
         if account.access_token and expires_at:
             refresh_deadline = datetime.utcnow() + timedelta(seconds=self.settings.token_refresh_leeway_seconds)

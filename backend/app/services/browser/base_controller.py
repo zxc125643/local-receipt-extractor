@@ -1,8 +1,10 @@
 import json
 import random
+import re
 import threading
 from abc import ABC, abstractmethod
 from datetime import datetime
+from typing import Optional
 
 from faker import Faker
 
@@ -17,6 +19,7 @@ class BaseBrowserController(ABC):
         self.max_captcha_retries = config.get('max_captcha_retries', 2)
         self.enable_oauth2 = config.get('enable_oauth2', False)
         self.proxy = config.get('proxy', '')
+        self.sms_service = config.get('sms_service', None)
 
         self.thread_local = threading.local()
         self.cleanup_lock = threading.Lock()
@@ -134,15 +137,72 @@ class BaseBrowserController(ABC):
             if page.get_by_text('一些异常活动').count() or page.get_by_text('此站点正在维护，暂时无法使用，请稍后重试。').count() > 0:
                 return False, "当前IP注册频率过快"
 
-            if page.locator('iframe#enforcementFrame').count() > 0:
-                return False, "验证码类型错误，非按压验证码"
-
             captcha_result = self.handle_captcha(page)
 
             if not captcha_result:
+                self._save_debug_screenshot(page, "captcha_failed")
                 return False, "验证码处理失败"
+
+            phone_result = self._handle_phone_verification(page)
+            if phone_result is False:
+                return False, "手机验证处理失败"
 
         except Exception as e:
             return False, f"加载超时或触发机器人检测: {str(e)}"
 
         return True, "注册成功"
+
+    def _save_debug_screenshot(self, page, name: str) -> None:
+        try:
+            from pathlib import Path
+
+            output_dir = Path("screenshots")
+            output_dir.mkdir(exist_ok=True)
+            page.screenshot(path=str(output_dir / f"{name}.png"), full_page=True)
+            (output_dir / f"{name}.url.txt").write_text(page.url, encoding="utf-8")
+        except Exception:
+            pass
+
+    def _handle_phone_verification(self, page) -> Optional[bool]:
+        try:
+            phone_input = page.locator('#phoneInput')
+            if phone_input.count() == 0:
+                return True
+
+            if not self.sms_service:
+                return False
+
+            page.wait_for_timeout(2000)
+            phone_data = self.sms_service.get_phone()
+            if not phone_data or not phone_data.get("phone"):
+                return False
+
+            phone = phone_data["phone"]
+            order_id = phone_data["order_id"]
+            phone_input.fill(phone)
+            page.locator('[data-testid="primaryButton"]').click(timeout=5000)
+            page.wait_for_timeout(3000)
+
+            otp = self.sms_service.wait_for_otp(order_id, timeout=180)
+            if not otp:
+                self.sms_service.release(order_id)
+                return False
+
+            code_inputs = page.locator('[data-testid="codeInput"]')
+            if code_inputs.count() > 0:
+                for i, ch in enumerate(otp):
+                    if i < code_inputs.count():
+                        code_inputs.nth(i).fill(ch)
+            else:
+                page.locator('input[type="tel"]').fill(otp)
+
+            page.locator('[data-testid="primaryButton"]').click(timeout=5000)
+            page.wait_for_timeout(3000)
+
+            if page.get_by_text("验证码错误").count() > 0:
+                return False
+
+            return True
+
+        except Exception:
+            return False

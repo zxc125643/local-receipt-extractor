@@ -21,7 +21,7 @@ const DEFAULT_SCOPES = [
 ];
 
 const DEFAULT_REGISTER_CONFIG: RegisterConfig = {
-  browser: "patchright",
+  browser: "bitbrowser",
   concurrent_flows: 5,
   max_tasks: 10,
   bot_protection_wait: 11,
@@ -96,9 +96,7 @@ export function RegisterPage() {
       await cancelTaskMutation.mutateAsync(currentTaskId);
     } else {
       // 开始新任务
-      await startTaskMutation.mutateAsync({
-        config: registerConfig,
-      });
+      await startTaskMutation.mutateAsync(registerConfig);
     }
   };
 

@@ -1,0 +1,125 @@
+{
+  "annotations": {
+    "workers/message": "Allow anonymous address creation for mail.krdmzig.cn",
+    "workers/triggered_by": "codex_variable_update"
+  },
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "main_module": "index.js",
+  "compatibility_date": "2025-04-01",
+  "bindings": [
+    {
+      "name": "ADMIN_PASSWORDS",
+      "type": "inherit",
+      "version_id": "e7afcf40-5087-4388-b58b-f4416230f642"
+    },
+    {
+      "name": "ADMIN_USER_ROLE",
+      "type": "inherit",
+      "version_id": "e7afcf40-5087-4388-b58b-f4416230f642"
+    },
+    {
+      "name": "BLACK_LIST",
+      "type": "inherit",
+      "version_id": "e7afcf40-5087-4388-b58b-f4416230f642"
+    },
+    {
+      "name": "DB",
+      "type": "inherit",
+      "version_id": "e7afcf40-5087-4388-b58b-f4416230f642"
+    },
+    {
+      "json": [
+        "krdmzig.cn"
+      ],
+      "name": "DEFAULT_DOMAINS",
+      "type": "json"
+    },
+    {
+      "name": "DEFAULT_LANG",
+      "type": "inherit",
+      "version_id": "e7afcf40-5087-4388-b58b-f4416230f642"
+    },
+    {
+      "json": false,
+      "name": "DISABLE_ANONYMOUS_USER_CREATE_EMAIL",
+      "type": "json"
+    },
+    {
+      "name": "DOMAINS",
+      "type": "inherit",
+      "version_id": "e7afcf40-5087-4388-b58b-f4416230f642"
+    },
+    {
+      "name": "ENABLE_AUTO_REPLY",
+      "type": "inherit",
+      "version_id": "e7afcf40-5087-4388-b58b-f4416230f642"
+    },
+    {
+      "name": "ENABLE_TG_PUSH_ATTACHMENT",
+      "type": "inherit",
+      "version_id": "e7afcf40-5087-4388-b58b-f4416230f642"
+    },
+    {
+      "name": "ENABLE_USER_CREATE_EMAIL",
+      "type": "inherit",
+      "version_id": "e7afcf40-5087-4388-b58b-f4416230f642"
+    },
+    {
+      "name": "ENABLE_USER_DELETE_EMAIL",
+      "type": "inherit",
+      "version_id": "e7afcf40-5087-4388-b58b-f4416230f642"
+    },
+    {
+      "name": "FRONTEND_URL",
+      "type": "inherit",
+      "version_id": "e7afcf40-5087-4388-b58b-f4416230f642"
+    },
+    {
+      "name": "JWT_SECRET",
+      "type": "inherit",
+      "version_id": "e7afcf40-5087-4388-b58b-f4416230f642"
+    },
+    {
+      "name": "KV",
+      "type": "inherit",
+      "version_id": "e7afcf40-5087-4388-b58b-f4416230f642"
+    },
+    {
+      "name": "PREFIX",
+      "type": "inherit",
+      "version_id": "e7afcf40-5087-4388-b58b-f4416230f642"
+    },
+    {
+      "name": "TELEGRAM_BOT_TOKEN",
+      "type": "inherit",
+      "version_id": "e7afcf40-5087-4388-b58b-f4416230f642"
+    },
+    {
+      "name": "TG_ALLOW_USER_LANG",
+      "type": "inherit",
+      "version_id": "e7afcf40-5087-4388-b58b-f4416230f642"
+    },
+    {
+      "name": "TG_MAX_ADDRESS",
+      "type": "inherit",
+      "version_id": "e7afcf40-5087-4388-b58b-f4416230f642"
+    },
+    {
+      "name": "TITLE",
+      "type": "inherit",
+      "version_id": "e7afcf40-5087-4388-b58b-f4416230f642"
+    },
+    {
+      "name": "USER_DEFAULT_ROLE",
+      "type": "inherit",
+      "version_id": "e7afcf40-5087-4388-b58b-f4416230f642"
+    },
+    {
+      "name": "USER_ROLES",
+      "type": "inherit",
+      "version_id": "e7afcf40-5087-4388-b58b-f4416230f642"
+    }
+  ]
+}

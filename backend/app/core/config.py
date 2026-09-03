@@ -12,6 +12,7 @@ class Settings:
     port: int = 8765
     desktop_token: str = "dev-token"
     data_dir: Path = Path.home() / ".core-gateway"
+    clash_proxy: str = "http://127.0.0.1:7897"
     token_endpoint: str = "https://login.microsoftonline.com/consumers/oauth2/v2.0/token"
     token_scope: str = "https://outlook.office.com/IMAP.AccessAsUser.All offline_access"
     imap_host: str = "outlook.office365.com"
@@ -44,9 +45,19 @@ def get_settings() -> Settings:
     data_dir = Path(os.getenv("CORE_GATEWAY_DATA_DIR", Path.home() / ".core-gateway"))
     data_dir.mkdir(parents=True, exist_ok=True)
 
-    return Settings(
+    settings = Settings(
         host=os.getenv("CORE_GATEWAY_HOST", "127.0.0.1"),
         port=int(os.getenv("CORE_GATEWAY_PORT", "8765")),
         desktop_token=os.getenv("CORE_GATEWAY_TOKEN", "dev-token"),
-        data_dir=data_dir
+        data_dir=data_dir,
+        clash_proxy=os.getenv("CORE_GATEWAY_PROXY", "http://127.0.0.1:7897")
     )
+
+    # Set HTTP_PROXY / HTTPS_PROXY env vars for library-level proxy support
+    # requests, httpx, urllib all respect these environment variables.
+    os.environ.setdefault("HTTP_PROXY", settings.clash_proxy)
+    os.environ.setdefault("HTTPS_PROXY", settings.clash_proxy)
+    os.environ.setdefault("ALL_PROXY", settings.clash_proxy)
+    os.environ.setdefault("NO_PROXY", "localhost,127.0.0.1,.local")
+
+    return settings

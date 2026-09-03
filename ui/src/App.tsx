@@ -9,7 +9,6 @@ import { AccountDetailPage } from "./pages/account-detail-page";
 import { AccountsPage } from "./pages/accounts-page";
 import { MailPage } from "./pages/mail-page";
 import { RegisterPage } from "./pages/register-page";
-import { ReceiptExtractorPage } from "./pages/receipt-extractor-page";
 
 export default function App() {
   useDesktopEvents();
@@ -65,7 +64,6 @@ export default function App() {
           <Route path="/accounts" element={<AccountsPage />} />
           <Route path="/accounts/:id" element={<AccountDetailPage />} />
           <Route path="/mail" element={<MailPage />} />
-          <Route path="/receipts" element={<ReceiptExtractorPage />} />
         </Route>
       </Routes>
     </>

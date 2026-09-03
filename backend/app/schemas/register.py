@@ -9,7 +9,7 @@ class RegisterConfig(BaseModel):
     """
     注册配置
     """
-    browser: str = "patchright"
+    browser: str = "bitbrowser"
     concurrent_flows: int = 5
     max_tasks: int = 10
     bot_protection_wait: int = 11

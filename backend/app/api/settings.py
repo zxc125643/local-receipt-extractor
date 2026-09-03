@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from backend.app.api.deps import assert_desktop_auth, get_db_session
 from backend.app.db.models import AppSettings
-from backend.app.schemas.settings import AppSettingsResponse, OAuth2Settings
+from backend.app.schemas.settings import AppSettingsResponse, OAuth2Settings, SmsSettings
 
 router = APIRouter(prefix="/settings", tags=["settings"], dependencies=[Depends(assert_desktop_auth)])
 
@@ -39,8 +39,35 @@ def get_oauth2_settings(session: Session = Depends(get_db_session)) -> OAuth2Set
     return OAuth2Settings(
         client_id=settings.oauth2_client_id,
         redirect_url=settings.oauth2_redirect_url,
-        scopes=scopes
+        scopes=json.loads(settings.oauth2_scopes)
     )
+
+
+@router.get("/sms", response_model=SmsSettings)
+def get_sms_settings(session: Session = Depends(get_db_session)) -> SmsSettings:
+    settings = _get_or_create_app_settings(session)
+    return SmsSettings(
+        provider=settings.sms_provider or "",
+        api_key=settings.sms_api_key or "",
+        country=settings.sms_country or "Indonesia",
+        operator=settings.sms_operator or "any",
+    )
+
+
+@router.put("/sms", response_model=SmsSettings)
+def update_sms_settings(
+    payload: SmsSettings,
+    session: Session = Depends(get_db_session)
+) -> SmsSettings:
+    settings = _get_or_create_app_settings(session)
+    settings.sms_provider = payload.provider
+    settings.sms_api_key = payload.api_key
+    settings.sms_country = payload.country
+    settings.sms_operator = payload.operator
+    settings.updated_at = datetime.utcnow()
+    session.commit()
+    session.refresh(settings)
+    return payload
 
 
 @router.put("/oauth2", response_model=OAuth2Settings)

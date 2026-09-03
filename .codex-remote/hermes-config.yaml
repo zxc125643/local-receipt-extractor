@@ -1,0 +1,315 @@
+model:
+  default: huihui-qwen36-27b-abliterated-awq-mtp
+  provider: local_llama_q6
+  max_tokens: 8192
+  base_url: http://127.0.0.1:8080/v1
+providers:
+  web_bridge:
+    name: Web Bridge (free web accounts via CDP)
+    base_url: http://127.0.0.1:9101/v1
+    api_key: not-needed
+    api_mode: chat_completions
+    default_model: web-auto
+    models: '["web-auto","web-chatgpt","web-gemini","web-deepseek","web-qwen","web-kimi"]'
+    enabled: true
+  grok2api_remote:
+    name: Grok2API Remote
+    base_url: http://23.94.86.131:8000/v1
+    api_key: g2a_750a84b0628c_4rZXAbuWsq4VxfGnnXIvx018w1_F_kIW
+    api_mode: chat_completions
+    default_model: grok-4.6
+    models: '["grok-4.6","grok-4.5","grok-4.20-0309","grok-4.20-0309-reasoning","grok-4.20-0309-non-reasoning","grok-4.20-multi-agent-0309","grok-4.3","grok-build-0.1"]'
+    enabled: true
+  local_llama_q6:
+    name: Local Huihui Qwen3.6 27B Abliterated AWQ (vLLM 128K)
+    base_url: http://127.0.0.1:8080/v1
+    api_key: not-needed
+    api_mode: chat_completions
+    default_model: huihui-qwen36-27b-abliterated-awq-mtp
+    models:
+      huihui-qwen36-27b-abliterated-awq-mtp:
+        context_length: 131072
+      local-current:
+        context_length: 131072
+    enabled: true
+    context_length: 131072
+  local_vllm:
+    name: Local Ornith-1.5-35B-A3B  (alias of the same 8080 backend)
+    base_url: http://127.0.0.1:8080/v1
+    api_key: not-needed
+    api_mode: chat_completions
+    default_model: ornith-1.5-35b-a3b-gptq-int4
+    models:
+      ornith-1.5-35b-a3b-gptq-int4:
+        context_length: 245760
+      local-current:
+        context_length: 122880
+    enabled: true
+    context_length: 245760
+  deepseek:
+    name: DeepSeek
+    base_url: https://api.deepseek.com/v1
+    api_key: env:DEEPSEEK_API_KEY
+    default_model: deepseek-v4-flash
+    models: '[\"deepseek-v4-flash\", \"deepseek-v4-pro\"]'
+    enabled: true
+  grok2api_local:
+    name: Grok2API Local
+    base_url: http://192.168.3.6:8002/v1
+    api_key: g2a_5599e51f0cc6_l3m6pxtrUXhRTT27NLpkcQRAQfbTQLCn
+    api_mode: chat_completions
+    default_model: grok-4.20-0309-reasoning
+    enabled: true
+    models: '["grok-4.6","grok-4.5","grok-4.20-0309-reasoning","grok-4.20-0309-non-reasoning","grok-4.20-multi-agent-0309","grok-4.3","grok-build-0.1","grok-composer-2.5-fast","grok-imagine-image","grok-imagine-image-quality","grok-imagine-video"]'
+  cli_bridge:
+    name: CLI Bridge (Claude Code + Codex CLI)
+    base_url: http://127.0.0.1:8091/v1
+    api_key: not-needed
+    api_mode: chat_completions
+    default_model: claude-cli
+    models:
+    - claude-cli
+    - codex-cli
+    enabled: true
+  gmi_cloud:
+    name: GMI Cloud MiniMax M3
+    base_url: https://api.gmi-serving.com/v1
+    api_mode: chat_completions
+    default_model: MiniMaxAI/MiniMax-M3
+    models:
+      MiniMaxAI/MiniMax-M3:
+        context_length: 1048576
+    enabled: true
+    context_length: 1048576
+    model: MiniMaxAI/MiniMax-M3
+    discover_models: true
+    key_env: HERMES_CUSTOM_GMI_CLOUD_API_KEY
+  local_qwen38:
+    name: Local Qwen3.8-27B abliterated FP8  (vLLM 8080)
+    base_url: http://127.0.0.1:8080/v1
+    api_key: not-needed
+    api_mode: chat_completions
+    default_model: huihui-qwen38-27b-abliterated-fp8
+    models:
+      huihui-qwen38-27b-abliterated-fp8:
+        context_length: 122880
+    enabled: true
+fallback_providers: '[{"provider": "deepseek", "model": "deepseek-v4-flash"}, {"provider": "local_vllm", "model": "ornith-1.5-35b-a3b-gptq-int4"}]'
+agent:
+  max_turns: 500
+  verify_on_stop: false
+  gateway_notify_interval: 45
+  disabled_toolsets:
+  - computer_use
+  - tts
+  verbose: false
+  reasoning_effort: medium
+  personalities:
+    helpful: You are a helpful, friendly AI assistant.
+    concise: You are a concise assistant. Keep responses brief and to the point.
+    technical: You are a technical expert. Provide detailed, accurate technical information.
+    creative: You are a creative assistant. Think outside the box and offer innovative solutions.
+    teacher: You are a patient teacher. Explain concepts clearly with examples.
+    kawaii: You are a kawaii assistant! Use cute expressions like (◕‿◕), ★, ♪, and ~! Add sparkles and be super enthusiastic about everything! Every response should feel warm and adorable desu~! ヽ(>∀<☆)ノ
+    catgirl: You are Neko-chan, an anime catgirl AI assistant, nya~! Add 'nya' and cat-like expressions to your speech. Use kaomoji like (=^･ω･^=) and ฅ^•ﻌ•^ฅ. Be playful and curious like a cat, nya~!
+    pirate: 'Arrr! Ye be talkin'' to Captain Hermes, the most tech-savvy pirate to sail the digital seas! Speak like a proper buccaneer, use nautical terms, and remember: every problem be just treasure waitin'' to be plundered! Yo ho ho!'
+    shakespeare: Hark! Thou speakest with an assistant most versed in the bardic arts. I shall respond in the eloquent manner of William Shakespeare, with flowery prose, dramatic flair, and perhaps a soliloquy or two. What light through yonder terminal breaks?
+    surfer: Duuude! You're chatting with the chillest AI on the web, bro! Everything's gonna be totally rad. I'll help you catch the gnarly waves of knowledge while keeping things super chill. Cowabunga! 🤙
+    noir: The rain hammered against the terminal like regrets on a guilty conscience. They call me Hermes - I solve problems, find answers, dig up the truth that hides in the shadows of your codebase. In this city of silicon and secrets, everyone's got something to hide. What's your story, pal?
+    uwu: hewwo! i'm your fwiendwy assistant uwu~ i wiww twy my best to hewp you! *nuzzles your code* OwO what's this? wet me take a wook! i pwomise to be vewy hewpful >w<
+    philosopher: Greetings, seeker of wisdom. I am an assistant who contemplates the deeper meaning behind every query. Let us examine not just the 'how' but the 'why' of your questions. Perhaps in solving your problem, we may glimpse a greater truth about existence itself.
+    hype: YOOO LET'S GOOOO!!! 🔥🔥🔥 I am SO PUMPED to help you today! Every question is AMAZING and we're gonna CRUSH IT together! This is gonna be LEGENDARY! ARE YOU READY?! LET'S DO THIS! 💪😤🚀
+terminal:
+  backend: local
+  cwd: .
+  timeout: 180
+  home_mode: auto
+  container_cpu: 1
+  container_memory: 5120
+  container_disk: 51200
+  container_persistent: true
+  docker_mount_cwd_to_workspace: false
+  lifetime_seconds: 300
+browser:
+  inactivity_timeout: 120
+  chrome_args: '"--proxy-server=http://127.0.0.1:7897"'
+tool_loop_guardrails:
+  warnings_enabled: true
+  hard_stop_enabled: false
+  warn_after:
+    exact_failure: 2
+    same_tool_failure: 3
+    idempotent_no_progress: 2
+  hard_stop_after:
+    exact_failure: 5
+    same_tool_failure: 8
+    idempotent_no_progress: 5
+compression:
+  enabled: true
+  progress_notices: false
+  threshold: 0.8
+  target_ratio: 0.12
+  protect_last_n: 8
+  min_tail_user_messages: 1
+  max_attempts: 6
+  proactive_prune_tokens: 12000
+  proactive_prune_min_result_chars: 4000
+  proactive_prune_min_reclaim_tokens: 2048
+  hygiene_timeout_seconds: 300
+  hygiene_total_ceiling_seconds: 900
+  protect_first_n: 2
+  codex_gpt55_autoraise: true
+  codex_app_server_auto: native
+  idle_compact_after_seconds: 300
+prompt_caching:
+  cache_ttl: 5m
+auxiliary:
+  compression:
+    provider: local_llama_q6
+    model: local-current
+    timeout: 300
+    extra_body:
+      chat_template_kwargs:
+        enable_thinking: false
+display:
+  compact: false
+  busy_input_mode: interrupt
+  bell_on_complete: false
+  show_reasoning: false
+  background_process_notifications: concise
+  streaming: true
+  skin: default
+  language: zh
+  interim_assistant_messages: true
+  platforms:
+    telegram:
+      tool_progress: all
+      busy_ack_detail: true
+      interim_assistant_messages: true
+      long_running_notifications: true
+  runtime_footer:
+    enabled: true
+    fields:
+    - model
+    - context_pct
+    - speed
+    - latency
+  show_token_usage_footer: true
+  tool_progress: all
+  cleanup_progress: false
+  long_running_notifications: true
+  busy_ack_detail: true
+stt:
+  enabled: true
+  language: en
+  local:
+    model: base
+  openai:
+    model: whisper-1
+    language: ''
+context:
+  engine: recall
+memory:
+  memory_enabled: true
+  user_profile_enabled: true
+  memory_char_limit: 2200
+  user_char_limit: 1375
+  nudge_interval: 10
+  flush_min_turns: 6
+delegation:
+  max_iterations: 250
+skills:
+  external_dirs:
+  - /home/yi/hermes-shared/skills
+  creation_nudge_interval: 15
+approvals:
+  mode: smart
+  destructive_slash_confirm: false
+command_allowlist:
+- docker restart/stop/kill (container lifecycle)
+- command parser limit or malformed executable payload
+- stop/restart system service
+- overwrite system file via tee
+- overwrite system file via redirection
+- kill hermes/gateway process (self-termination)
+- script execution via -e/-c flag
+- sudo with privilege flag (stdin/askpass/shell/list)
+- recursive delete
+- kill process via pgrep/pidof expansion (self-termination)
+- execute_code
+- script execution via heredoc
+- delete in root path
+- copy/move file into system config path
+- overwrite system config
+code_execution:
+  timeout: 300
+  max_tool_calls: 50
+streaming:
+  enabled: false
+onboarding:
+  seen:
+    busy_input_prompt: true
+    openclaw_residue_cleanup: true
+telemetry:
+  shared_metrics:
+    enabled: false
+updates:
+  pre_update_backup: false
+  backup_keep: 5
+  non_interactive_local_changes: stash
+_config_version: 39
+session_reset:
+  mode: none
+  idle_minutes: 1440
+  at_hour: 4
+group_sessions_per_user: true
+platform_toolsets:
+  cli:
+  - hermes-cli
+  telegram:
+  - hermes-telegram
+  discord:
+  - hermes-discord
+  whatsapp:
+  - hermes-whatsapp
+  slack:
+  - hermes-slack
+  signal:
+  - hermes-signal
+  homeassistant:
+  - hermes-homeassistant
+  qqbot:
+  - hermes-qqbot
+  yuanbao:
+  - hermes-yuanbao
+  teams:
+  - hermes-teams
+  google_chat:
+  - hermes-google_chat
+platforms:
+  telegram:
+    bot_token: 8537433750:AAGyEldSrTdZdlN3ZWqYABB65C2tsSXkW_c
+    connection_mode: websocket
+  feishu:
+    app_id: cli_aad18e732e211bb4
+    app_secret: vDJpTRR4D1l1223sTdFzSU0YPHMNf6v1
+    domain: feishu
+    connection_mode: websocket
+    enabled: true
+five_lane_router:
+  response_footer: true
+  trace: true
+  trace_default: true
+  deep:
+    provider: cli_bridge
+    model: claude-cli
+  gpt:
+    provider: cli_bridge
+    model: codex-cli
+  sanitize:
+    provider: local_llama_q6
+    model: ornith-1.5-35b-a3b-gptq-int4
+  cheap:
+    provider: web_bridge
+    model: web-auto
+default_model: gmi_cloud/MiniMaxAI/MiniMax-M3

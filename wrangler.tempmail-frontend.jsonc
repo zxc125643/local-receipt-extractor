@@ -1,0 +1,23 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "krdmzig-tempmail-frontend",
+  "main": "worker/tempmail-frontend.js",
+  "compatibility_date": "2025-04-01",
+  "routes": [
+    {
+      "pattern": "mail.krdmzig.cn/*",
+      "zone_name": "krdmzig.cn"
+    }
+  ],
+  "assets": {
+    "directory": "./.tmp-tempmail-assets",
+    "binding": "ASSETS",
+    "run_worker_first": true
+  },
+  "services": [
+    {
+      "binding": "API",
+      "service": "krdmzig-tempmail-api"
+    }
+  ]
+}

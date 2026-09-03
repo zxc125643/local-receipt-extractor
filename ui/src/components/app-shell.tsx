@@ -16,10 +16,6 @@ const PAGE_META: Record<string, { title: string; description: string }> = {
     title: "邮件中心",
     description: "",
   },
-  "/receipts": {
-    title: "截图提取",
-    description: "",
-  },
 };
 
 const SIDEBAR_STORAGE_KEY = "core-gateway-sidebar-collapsed";
@@ -70,9 +66,6 @@ export function AppShell() {
           </NavLink>
           <NavLink className="nav-link" to="/mail">
             <span className="nav-label">邮件中心</span>
-          </NavLink>
-          <NavLink className="nav-link" to="/receipts">
-            <span className="nav-label">截图提取</span>
           </NavLink>
         </nav>
       </aside>

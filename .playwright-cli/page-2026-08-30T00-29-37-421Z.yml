@@ -1,0 +1,170 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - banner [ref=e3]:
+      - heading "方格志" [level=1] [ref=e11]
+      - generic [ref=e12]:
+        - button "⌂" [ref=e13] [cursor=pointer]
+        - button "⌁" [ref=e14] [cursor=pointer]
+        - button "↓" [ref=e15] [cursor=pointer]
+    - main [ref=e16]:
+      - generic [ref=e17]:
+        - generic [ref=e18]:
+          - generic [ref=e19]:
+            - heading "图片 1" [level=2] [ref=e20]
+            - paragraph [ref=e21]: 点击素材自动填入下一个空格 · 长按替换当前格 · 电脑可拖动指定位置
+          - generic [ref=e22]: 2 / 9 已放置
+        - generic [ref=e23]:
+          - generic [ref=e24]:
+            - generic [ref=e25]: 项目素材
+            - generic [ref=e26]:
+              - generic [ref=e27]: 共 13 张 · 本页已用 2 张
+              - generic [ref=e28] [cursor=pointer]: ＋ 上传
+          - generic [ref=e29]:
+            - generic "点击自动填空，长按替换当前格" [ref=e130]:
+              - generic [ref=e131]:
+                - img "素材1.svg"
+                - generic [ref=e132]: 已用
+              - generic [ref=e133]: 素材1.svg
+            - generic "点击自动填空，长按替换当前格" [ref=e134]:
+              - generic [ref=e135]:
+                - img "素材2.svg"
+                - generic [ref=e136]: 已用
+              - generic [ref=e137]: 素材2.svg
+            - generic "点击自动填空，长按替换当前格" [ref=e138]:
+              - generic [ref=e139]:
+                - img "素材3.svg"
+                - generic [ref=e140]: 未使用
+              - generic [ref=e141]: 素材3.svg
+            - generic "点击自动填空，长按替换当前格" [ref=e142]:
+              - generic [ref=e143]:
+                - img "素材4.svg"
+                - generic [ref=e144]: 未使用
+              - generic [ref=e145]: 素材4.svg
+            - generic "点击自动填空，长按替换当前格" [ref=e146]:
+              - generic [ref=e147]:
+                - img "素材5.svg"
+                - generic [ref=e148]: 未使用
+              - generic [ref=e149]: 素材5.svg
+            - generic "点击自动填空，长按替换当前格" [ref=e150]:
+              - generic [ref=e151]:
+                - img "素材6.svg"
+                - generic [ref=e152]: 未使用
+              - generic [ref=e153]: 素材6.svg
+            - generic "点击自动填空，长按替换当前格" [ref=e154]:
+              - generic [ref=e155]:
+                - img "素材7.svg"
+                - generic [ref=e156]: 未使用
+              - generic [ref=e157]: 素材7.svg
+            - generic "点击自动填空，长按替换当前格" [ref=e158]:
+              - generic [ref=e159]:
+                - img "素材8.svg"
+                - generic [ref=e160]: 未使用
+              - generic [ref=e161]: 素材8.svg
+            - generic "点击自动填空，长按替换当前格" [ref=e162]:
+              - generic [ref=e163]:
+                - img "素材9.svg"
+                - generic [ref=e164]: 未使用
+              - generic [ref=e165]: 素材9.svg
+            - generic "点击自动填空，长按替换当前格" [ref=e166]:
+              - generic [ref=e167]:
+                - img "素材10.svg"
+                - generic [ref=e168]: 未使用
+              - generic [ref=e169]: 素材10.svg
+            - generic "点击自动填空，长按替换当前格" [ref=e170]:
+              - generic [ref=e171]:
+                - img "素材11.svg"
+                - generic [ref=e172]: 未使用
+              - generic [ref=e173]: 素材11.svg
+            - generic "点击自动填空，长按替换当前格" [ref=e174]:
+              - generic [ref=e175]:
+                - img "素材12.svg"
+                - generic [ref=e176]: 未使用
+              - generic [ref=e177]: 素材12.svg
+            - generic "点击自动填空，长按替换当前格" [ref=e178]:
+              - generic [ref=e179]:
+                - img "page_01.png"
+                - generic [ref=e180]: 未使用
+              - generic [ref=e181]: page_01.png
+        - generic [ref=e32]:
+          - article [ref=e182]:
+            - generic [ref=e183] [cursor=pointer]:
+              - img "素材1.svg"
+              - generic [ref=e184]: "1"
+            - textbox "第 1 格内容" [ref=e185]:
+              - /placeholder: 输入内容…
+          - article [ref=e186]:
+            - generic [ref=e187] [cursor=pointer]:
+              - generic [ref=e189]:
+                - generic [ref=e190]: ＋
+                - text: 拖入图片
+              - generic [ref=e191]: "2"
+            - textbox "第 2 格内容" [ref=e192]:
+              - /placeholder: 输入内容…
+          - article [ref=e193]:
+            - generic [ref=e194] [cursor=pointer]:
+              - generic [ref=e196]:
+                - generic [ref=e197]: ＋
+                - text: 拖入图片
+              - generic [ref=e198]: "3"
+            - textbox "第 3 格内容" [ref=e199]:
+              - /placeholder: 输入内容…
+          - article [ref=e200]:
+            - generic [ref=e201] [cursor=pointer]:
+              - generic [ref=e203]:
+                - generic [ref=e204]: ＋
+                - text: 拖入图片
+              - generic [ref=e205]: "4"
+            - textbox "第 4 格内容" [ref=e206]:
+              - /placeholder: 输入内容…
+          - article [ref=e207]:
+            - generic [ref=e208] [cursor=pointer]:
+              - img "素材2.svg"
+              - generic [ref=e209]: "5"
+            - textbox "第 5 格内容" [ref=e210]:
+              - /placeholder: 输入内容…
+          - article [ref=e211]:
+            - generic [ref=e212] [cursor=pointer]:
+              - generic [ref=e214]:
+                - generic [ref=e215]: ＋
+                - text: 拖入图片
+              - generic [ref=e216]: "6"
+            - textbox "第 6 格内容" [ref=e217]:
+              - /placeholder: 输入内容…
+          - article [ref=e218]:
+            - generic [ref=e219] [cursor=pointer]:
+              - generic [ref=e221]:
+                - generic [ref=e222]: ＋
+                - text: 拖入图片
+              - generic [ref=e223]: "7"
+            - textbox "第 7 格内容" [ref=e224]:
+              - /placeholder: 输入内容…
+          - article [ref=e225]:
+            - generic [ref=e226] [cursor=pointer]:
+              - generic [ref=e228]:
+                - generic [ref=e229]: ＋
+                - text: 拖入图片
+              - generic [ref=e230]: "8"
+            - textbox "第 8 格内容" [ref=e231]:
+              - /placeholder: 输入内容…
+          - article [ref=e232]:
+            - generic [ref=e233] [cursor=pointer]:
+              - generic [ref=e235]:
+                - generic [ref=e236]: ＋
+                - text: 拖入图片
+              - generic [ref=e237]: "9"
+            - textbox "第 9 格内容" [ref=e238]:
+              - /placeholder: 输入内容…
+    - generic [ref=e117]:
+      - button "☰ 设置" [ref=e118] [cursor=pointer]:
+        - generic [ref=e119]: ☰
+        - generic [ref=e120]: 设置
+      - generic [ref=e121] [cursor=pointer]:
+        - generic [ref=e122]: ＋
+        - generic [ref=e123]: 上传
+      - button "⌫ 清空 5" [ref=e239] [cursor=pointer]:
+        - generic [ref=e125]: ⌫
+        - generic [ref=e126]: 清空 5
+      - button "↓ 导出" [ref=e127] [cursor=pointer]:
+        - generic [ref=e128]: ↓
+        - generic [ref=e129]: 导出
+  - generic: 1 张图片已全部进入素材库

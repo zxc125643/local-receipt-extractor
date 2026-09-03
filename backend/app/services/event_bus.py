@@ -33,14 +33,18 @@ class EventBus:
         self._subscribers[key].add(queue)
         return queue
 
-    def unsubscribe(self, event: str | None, queue: asyncio.Queue) -> None:
+    def unsubscribe(self, event: str | asyncio.Queue | None, queue: asyncio.Queue | None = None) -> None:
         """
         取消订阅事件
 
         Args:
-            event: 事件名称
+            event: 事件名称，或兼容旧调用传入事件队列
             queue: 事件队列
         """
+        if queue is None:
+            queue = event  # type: ignore[assignment]
+            event = None
+
         key = event or "__all__"
         if key in self._subscribers:
             self._subscribers[key].discard(queue)

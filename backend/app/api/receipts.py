@@ -83,6 +83,8 @@ async def process_receipts(
     get_extractor()
     job_id = str(uuid.uuid4())
     job = ReceiptJob(total=len(uploaded_images), files=uploaded_images, payment_images=source_images, invoice_images=source_images, worker_count=worker_count)
+    if uploaded_images:
+        job.current_file = uploaded_images[0][0]
     jobs[job_id] = job
     asyncio.create_task(run_receipt_job(job, requested_columns))
     return {"job_id": job_id, "status": job.status, "total": job.total, "completed": job.completed}

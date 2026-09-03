@@ -1,0 +1,24 @@
+[Unit]
+Description=Qwen3.8 27B Abliterated Q6_K VLM llama.cpp backend
+After=network-online.target
+Wants=network-online.target
+Conflicts=ornith-a3b-q6-llama.service ornith-a3b-vllm.service ornith-autoround.service qwen38-27b-abliterated-awq-mtp-vllm.service qwen38-27b-uncensored-fp8-vllm.service qwen38-27b-q8-llama.service qwen38-27b-q4-llama.service vllm-2080ti.service
+
+[Service]
+Type=simple
+WorkingDirectory=/home/yi
+ExecStartPre=/bin/bash -c 'for i in $(seq 1 40); do u=$(nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits | paste -sd+ | bc); if [ "$u" -lt 1500 ]; then exit 0; fi; sleep 3; done; echo "VRAM still held after 120s, starting anyway"; exit 0'
+ExecStart=/home/yi/start-qwen38-27b-q6-llama.sh
+Restart=on-failure
+RestartSec=8
+KillSignal=SIGINT
+TimeoutStartSec=300
+TimeoutStopSec=120
+Environment=HOME=/home/yi
+Environment=CUDA_VISIBLE_DEVICES=0,1
+LimitCORE=0
+StandardOutput=append:/home/yi/qwen38-27b-q6-llama.log
+StandardError=append:/home/yi/qwen38-27b-q6-llama.log
+
+[Install]
+WantedBy=default.target

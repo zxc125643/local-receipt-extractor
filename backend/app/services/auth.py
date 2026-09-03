@@ -26,7 +26,8 @@ class OutlookOAuthService:
     settings: Settings
 
     async def refresh_access_token(self, account: Account) -> AccessTokenBundle:
-        async with httpx.AsyncClient(timeout=20.0) as client:
+        proxy_url = self.settings.clash_proxy if self.settings.clash_proxy else None
+        async with httpx.AsyncClient(timeout=20.0, proxies=proxy_url) as client:
             response = await client.post(
                 self.settings.token_endpoint,
                 data={

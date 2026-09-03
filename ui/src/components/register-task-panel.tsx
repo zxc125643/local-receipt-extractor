@@ -75,6 +75,17 @@ export function RegisterTaskPanel({
             <div className="radio-group">
               <label className="radio-label">
                 <input
+                  checked={config.browser === "bitbrowser"}
+                  disabled={isRegistering}
+                  name="browser"
+                  onChange={() => handleBrowserChange("bitbrowser")}
+                  type="radio"
+                  value="bitbrowser"
+                />
+                <span>比特浏览器（BitBrowser）</span>
+              </label>
+              <label className="radio-label">
+                <input
                   checked={config.browser === "patchright"}
                   disabled={isRegistering}
                   name="browser"

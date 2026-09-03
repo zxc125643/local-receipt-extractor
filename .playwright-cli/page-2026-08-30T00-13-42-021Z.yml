@@ -1,0 +1,214 @@
+- generic [ref=e2]:
+  - banner [ref=e3]:
+    - generic [ref=e10]:
+      - heading "方格志" [level=1] [ref=e11]
+      - generic [ref=e12]: 离线拼图工作台 · 素材库版
+    - generic [ref=e13]:
+      - button "⌂ 项目库" [ref=e14] [cursor=pointer]:
+        - text: ⌂
+        - generic [ref=e15]: 项目库
+      - button "⌁ 保存项目" [ref=e16] [cursor=pointer]:
+        - text: ⌁
+        - generic [ref=e17]: 保存项目
+      - button "↓ 导出当前图片" [ref=e18] [cursor=pointer]:
+        - text: ↓
+        - generic [ref=e19]: 导出当前图片
+  - main [ref=e20]:
+    - complementary [ref=e21]:
+      - generic [ref=e22]:
+        - generic [ref=e23]:
+          - heading "01 · 项目信息" [level=2] [ref=e24]
+          - generic [ref=e25]: 整套保存
+        - generic [ref=e26]:
+          - text: 项目名称
+          - textbox "项目名称" [ref=e27]:
+            - /placeholder: 输入项目名称
+            - text: 未命名项目
+        - generic [ref=e28]:
+          - text: 项目说明
+          - textbox "项目说明" [ref=e29]:
+            - /placeholder: 填写整个项目的用途或说明…
+      - generic [ref=e30]:
+        - generic [ref=e31]:
+          - heading "02 · 图片页" [level=2] [ref=e32]
+          - button "＋ 新建" [ref=e33] [cursor=pointer]
+        - button "1 图片 1 0 张素材 · 4 × 3" [ref=e35] [cursor=pointer]:
+          - generic [ref=e36]: "1"
+          - generic [ref=e37]:
+            - generic [ref=e38]: 图片 1
+            - generic [ref=e39]: 0 张素材 · 4 × 3
+        - generic [ref=e40]:
+          - text: 当前图片名称
+          - textbox "当前图片名称" [ref=e41]:
+            - /placeholder: 例如：产品正面展示
+            - text: 图片 1
+        - generic [ref=e42]:
+          - text: 当前图片描述
+          - textbox "当前图片描述" [ref=e43]:
+            - /placeholder: 填写这张成品图的描述…
+      - generic [ref=e44]:
+        - generic [ref=e45]:
+          - heading "03 · 选择框架" [level=2] [ref=e46]
+          - generic [ref=e47]: 4 × 3
+        - generic [ref=e48]:
+          - button "3 × 3 九宫格" [ref=e49] [cursor=pointer]:
+            - generic [ref=e60]: 3 × 3
+            - text: 九宫格
+          - button "4 × 3 横向组图" [ref=e61] [cursor=pointer]:
+            - generic [ref=e75]: 4 × 3
+            - text: 横向组图
+          - button "3 × 4 纵向组图" [ref=e76] [cursor=pointer]:
+            - generic [ref=e90]: 3 × 4
+            - text: 纵向组图
+          - button "5 × 5 五五方阵" [ref=e91] [cursor=pointer]:
+            - generic [ref=e118]: 5 × 5
+            - text: 五五方阵
+        - generic [ref=e119]:
+          - generic [ref=e120]:
+            - text: 列数
+            - spinbutton "列数" [ref=e121]: "4"
+          - generic [ref=e122]:
+            - text: 行数
+            - spinbutton "行数" [ref=e123]: "3"
+      - generic [ref=e124]:
+        - generic [ref=e125]:
+          - heading "04 · 项目素材库" [level=2] [ref=e126]
+          - generic [ref=e127]: 0 张
+        - generic [ref=e129] [cursor=pointer]:
+          - generic [ref=e130]: ＋ 上传或拖入图片
+          - text: 可一次选择多张，全部进入素材库
+        - generic [ref=e131]: 尚未导入图片
+      - generic [ref=e132]:
+        - heading "05 · 画布设置" [level=2] [ref=e134]
+        - generic [ref=e135]:
+          - text: 格间距
+          - generic [ref=e136]:
+            - slider "格间距 6 px" [ref=e137]: "6"
+            - generic [ref=e138]: 6 px
+        - generic [ref=e139]:
+          - text: 背景色
+          - textbox "背景色" [ref=e140]: "#ffffff"
+        - generic [ref=e141]:
+          - text: 画布预览缩放
+          - generic [ref=e142]:
+            - slider "画布预览缩放 100%" [ref=e143]: "100"
+            - generic [ref=e144]: 100%
+        - generic [ref=e145]:
+          - generic [ref=e146]: 小红书高清 PNG
+          - text: 固定宽度 1080 px，无需设置
+    - generic [ref=e147]:
+      - generic [ref=e148]:
+        - generic [ref=e149]:
+          - heading "图片 1" [level=2] [ref=e150]
+          - paragraph [ref=e151]: 点击或长按素材自动填入下一个空格 · 拖动素材可指定位置
+        - generic [ref=e152]: 0 / 12 已放置
+      - generic [ref=e153]:
+        - generic [ref=e154]:
+          - generic [ref=e155]: 全部项目素材
+          - generic [ref=e156]: 共 0 张 · 本页已用 0 张
+        - generic [ref=e157]: 所有导入图片都会显示在这里，不受框架格子数量限制
+      - generic [ref=e160]:
+        - article [ref=e161]:
+          - generic [ref=e162] [cursor=pointer]:
+            - generic [ref=e164]:
+              - generic [ref=e165]: ＋
+              - text: 拖入图片
+            - generic [ref=e166]: "1"
+          - textbox "第 1 格内容" [ref=e167]:
+            - /placeholder: 输入内容…
+        - article [ref=e168]:
+          - generic [ref=e169] [cursor=pointer]:
+            - generic [ref=e171]:
+              - generic [ref=e172]: ＋
+              - text: 拖入图片
+            - generic [ref=e173]: "2"
+          - textbox "第 2 格内容" [ref=e174]:
+            - /placeholder: 输入内容…
+        - article [ref=e175]:
+          - generic [ref=e176] [cursor=pointer]:
+            - generic [ref=e178]:
+              - generic [ref=e179]: ＋
+              - text: 拖入图片
+            - generic [ref=e180]: "3"
+          - textbox "第 3 格内容" [ref=e181]:
+            - /placeholder: 输入内容…
+        - article [ref=e182]:
+          - generic [ref=e183] [cursor=pointer]:
+            - generic [ref=e185]:
+              - generic [ref=e186]: ＋
+              - text: 拖入图片
+            - generic [ref=e187]: "4"
+          - textbox "第 4 格内容" [ref=e188]:
+            - /placeholder: 输入内容…
+        - article [ref=e189]:
+          - generic [ref=e190] [cursor=pointer]:
+            - generic [ref=e192]:
+              - generic [ref=e193]: ＋
+              - text: 拖入图片
+            - generic [ref=e194]: "5"
+          - textbox "第 5 格内容" [ref=e195]:
+            - /placeholder: 输入内容…
+        - article [ref=e196]:
+          - generic [ref=e197] [cursor=pointer]:
+            - generic [ref=e199]:
+              - generic [ref=e200]: ＋
+              - text: 拖入图片
+            - generic [ref=e201]: "6"
+          - textbox "第 6 格内容" [ref=e202]:
+            - /placeholder: 输入内容…
+        - article [ref=e203]:
+          - generic [ref=e204] [cursor=pointer]:
+            - generic [ref=e206]:
+              - generic [ref=e207]: ＋
+              - text: 拖入图片
+            - generic [ref=e208]: "7"
+          - textbox "第 7 格内容" [ref=e209]:
+            - /placeholder: 输入内容…
+        - article [ref=e210]:
+          - generic [ref=e211] [cursor=pointer]:
+            - generic [ref=e213]:
+              - generic [ref=e214]: ＋
+              - text: 拖入图片
+            - generic [ref=e215]: "8"
+          - textbox "第 8 格内容" [ref=e216]:
+            - /placeholder: 输入内容…
+        - article [ref=e217]:
+          - generic [ref=e218] [cursor=pointer]:
+            - generic [ref=e220]:
+              - generic [ref=e221]: ＋
+              - text: 拖入图片
+            - generic [ref=e222]: "9"
+          - textbox "第 9 格内容" [ref=e223]:
+            - /placeholder: 输入内容…
+        - article [ref=e224]:
+          - generic [ref=e225] [cursor=pointer]:
+            - generic [ref=e227]:
+              - generic [ref=e228]: ＋
+              - text: 拖入图片
+            - generic [ref=e229]: "10"
+          - textbox "第 10 格内容" [ref=e230]:
+            - /placeholder: 输入内容…
+        - article [ref=e231]:
+          - generic [ref=e232] [cursor=pointer]:
+            - generic [ref=e234]:
+              - generic [ref=e235]: ＋
+              - text: 拖入图片
+            - generic [ref=e236]: "11"
+          - textbox "第 11 格内容" [ref=e237]:
+            - /placeholder: 输入内容…
+        - article [ref=e238]:
+          - generic [ref=e239] [cursor=pointer]:
+            - generic [ref=e241]:
+              - generic [ref=e242]: ＋
+              - text: 拖入图片
+            - generic [ref=e243]: "12"
+          - textbox "第 12 格内容" [ref=e244]:
+            - /placeholder: 输入内容…
+    - complementary [ref=e245]:
+      - generic [ref=e246]:
+        - generic [ref=e247]:
+          - heading "当前小框" [level=2] [ref=e248]
+          - generic [ref=e249]: 第 1 格
+        - generic [ref=e250]: 尚未添加图片
+        - button "清空当前格子" [ref=e252] [cursor=pointer]
+      - generic [ref=e253]: 操作提示点击或长按素材，会按顺序填入下一个空格；需要指定位置或替换时，直接把素材拖进目标小框。红色素材表示本页已使用，灰色表示未使用。

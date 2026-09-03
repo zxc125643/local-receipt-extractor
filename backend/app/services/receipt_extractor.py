@@ -427,6 +427,10 @@ class LocalReceiptExtractor:
                 sessions.put(reader)
 
         results: list[list[str] | None] = [None] * len(images)
+        # Report the file before OCR starts.  OCR can take several seconds on a
+        # large screenshot; without this callback the UI looks frozen at 0/total.
+        if progress:
+            progress(0, len(images), 0)
         with ThreadPoolExecutor(max_workers=worker_count, thread_name_prefix="receipt-ocr") as executor:
             futures = {executor.submit(read_one, image): index for index, image in enumerate(images)}
             for completed, future in enumerate(as_completed(futures), start=1):
