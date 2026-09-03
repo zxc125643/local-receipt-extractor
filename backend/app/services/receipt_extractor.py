@@ -404,12 +404,17 @@ class LocalReceiptExtractor:
             return results
         configured_workers = int(getenv("RECEIPT_OCR_WORKERS", "2")) if worker_count is None else worker_count
         worker_count = min(max(1, configured_workers), len(images))
-        readers = local()
+        sessions: Queue[LocalReceiptExtractor] = Queue()
+        sessions.put(self)
+        for _ in range(worker_count - 1):
+            sessions.put(LocalReceiptExtractor())
 
         def read_one(image: bytes) -> list[str]:
-            if not hasattr(readers, "ocr"):
-                readers.ocr = LocalReceiptExtractor()
-            return readers.ocr.read(image)
+            reader = sessions.get()
+            try:
+                return reader.read(image)
+            finally:
+                sessions.put(reader)
 
         results: list[list[str] | None] = [None] * len(images)
         with ThreadPoolExecutor(max_workers=worker_count, thread_name_prefix="receipt-ocr") as executor:
