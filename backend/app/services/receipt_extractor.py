@@ -174,6 +174,24 @@ def extract_known_fields(lines: OCRLines) -> dict[str, str]:
     transaction_match = re.search(r"(?:交易单号|订单号|交易号|转账单号)\s*[:：]?\s*([A-Za-z0-9]{8,})", text)
     personal_payee, personal_description = _personal_payment_title(cleaned)
     title_merchant = _unlabelled_merchant_title(cleaned)
+    if _is_train_ticket(lines):
+        compact = re.sub(r"\s+", "", text)
+        def labelled(label: str) -> str:
+            for i, line in enumerate(cleaned):
+                if label in line and i + 1 < len(cleaned):
+                    return cleaned[i + 1].strip()
+            return ""
+        fare_match = re.search(r"票价\s*[：:]?\s*(?:票)?\s*[￥¥]?\s*([0-9]+(?:\.\d{1,2})?)", text)
+        fare = fare_match.group(1) if fare_match else (re.search(r"票\s*([0-9]+(?:\.\d{1,2})?)", text) or ["", ""])[1]
+        date_match = re.search(r"(20\d{2})\s*[-/]\s*(\d{1,2})\s*[-/]\s*(\d{1,2})", text) or re.search(r"(20\d{2})年(\d{1,2})月(\d{1,2})日?", text)
+        ticket_match = re.search(r"(?:发票号码|票号)\s*[:：]?\s*([A-Za-z0-9]{6,})", text)
+        train = labelled("班次")
+        if not train.isdigit():
+            train_candidates = re.findall(r"(?<!\d)(\d{3,5})(?!\d)", text)
+            train = train_candidates[-1] if train_candidates else ""
+        departure = labelled("始发站") or next((line for line in cleaned if line.endswith("客运站")), "")
+        arrival = labelled("到达站") or next((line for line in cleaned if line in {"孝感", "孝昌", "远安"}), "")
+        return {"payment_amount": fare, "payment_time": (f"{date_match.group(1)}-{int(date_match.group(2)):02d}-{int(date_match.group(3)):02d}" if date_match else ""), "merchant_name": "湖北省道路客运", "product_name": "客运车票", "transaction_number": ticket_match.group(1) if ticket_match else "", "departure_station": departure, "arrival_station": arrival, "train_number": train, "seat_number": labelled("座位号"), "ticket_price": fare}
 
     labelled_time = re.search(r'(?:支付时间|付款时间|转账时间)\s*[:：]?\s*([\s\S]{0,45})', text)
     refund = re.search(r'已退款\s*[（(]?\s*[¥￥]?\s*('+AMOUNT_PATTERN+r')', text)
@@ -305,6 +323,11 @@ def is_invoice(lines: OCRLines) -> bool:
     return markers >= 1 and (markers >= 2 or long_number)
 
 
+def _is_train_ticket(lines: OCRLines) -> bool:
+    text = re.sub(r"\s+", "", "\n".join(lines))
+    return "湖北省道路客运发票" in text or ("乘车日期" in text and "票价" in text)
+
+
 COLUMN_ALIASES = {
     "付款金额": "payment_amount",
     "支付金额": "payment_amount",
@@ -326,6 +349,14 @@ COLUMN_ALIASES = {
     "发票号码": "invoice_number",
     "发票号": "invoice_number",
     "发票日期": "invoice_date",
+    "出发站": "departure_station",
+    "始发站": "departure_station",
+    "到达站": "arrival_station",
+    "班次": "train_number",
+    "车次": "train_number",
+    "座位号": "seat_number",
+    "票价": "ticket_price",
+    "票号": "transaction_number",
 }
 
 
@@ -827,6 +858,26 @@ class LocalReceiptExtractor:
         if self.engine == "paddle":
             paddle_lines = self._read_paddle(image_bytes)
             if paddle_lines:
+                # Passenger tickets are often photographed sideways. Try all
+                # right-angle rotations and retain the OCR view with the most
+                # ticket-specific anchors before field extraction.
+                if _is_train_ticket(paddle_lines):
+                    try:
+                        from PIL import Image
+                        source = Image.open(BytesIO(image_bytes)).convert("RGB")
+                        candidates = [(paddle_lines, 0)]
+                        for angle in (90, 180, 270):
+                            rotated = source.rotate(angle, expand=True)
+                            buf = BytesIO(); rotated.save(buf, format="JPEG", quality=92)
+                            lines = self._read_paddle(buf.getvalue())
+                            candidates.append((lines, angle))
+                        def score(item: tuple[list[str], int]) -> tuple[int, int]:
+                            joined = "".join(item[0])
+                            anchors = sum(token in joined for token in ("湖北省道路客运发票", "乘车日期", "票价", "发票号码", "始发站", "到达站"))
+                            return anchors, len(item[0])
+                        return max(candidates, key=score)[0]
+                    except Exception:
+                        pass
                 return paddle_lines
         result, _elapsed = self._ocr(image_bytes)
         lines = [item[1] for item in result or []]
