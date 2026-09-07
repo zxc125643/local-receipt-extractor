@@ -213,6 +213,30 @@ def extract_invoice_fields(lines: OCRLines) -> dict[str, str]:
     }
 
 
+def _invoice_filename_metadata(source: str) -> dict[str, str]:
+    """Recover reliable invoice metadata from standardized e-invoice filenames.
+
+    Some PDF exports contain an unreadable HTML/template layer.  Their filename
+    still carries the amount/date (and often seller), so use it only as a
+    conservative fallback when OCR did not produce those fields.
+    """
+    name = Path(source).name
+    metadata: dict[str, str] = {}
+    amount = re.search(r"[-_](\d+(?:\.\d{1,2})?)\.pdf$", name, re.IGNORECASE)
+    if amount:
+        metadata["invoice_amount"] = f"{float(amount.group(1)):.2f}"
+    date = re.search(r"(20\d{2})年?(\d{1,2})月?(\d{1,2})日?", name)
+    if date:
+        metadata["invoice_date"] = f"{date.group(1)}-{int(date.group(2)):02d}-{int(date.group(3)):02d}"
+    seller = re.search(r"^dzfp_[^_]+_(.+?)_20\d{6,14}(?:\.|_)", name, re.IGNORECASE)
+    if seller:
+        metadata["invoice_merchant"] = seller.group(1)
+    elif "通行费" in name:
+        metadata["invoice_merchant"] = "通行费"
+        metadata["invoice_item"] = "通行费"
+    return metadata
+
+
 def classify_expense(row: dict[str, str]) -> str:
     """Assign a conservative reimbursement category from merchant and item text."""
     text = " ".join(
@@ -294,7 +318,24 @@ def build_payment_rows(columns: Sequence[str], documents: Sequence[tuple[str, OC
     if "是否有发票" not in result_columns:
         result_columns.append("是否有发票")
 
-    invoices = [{**extract_invoice_fields(lines), "_source": name} for name, lines in documents if is_invoice(lines)]
+    invoices = []
+    for name, lines in documents:
+        if not is_invoice(lines):
+            continue
+        invoice = {**extract_invoice_fields(lines), "_source": name}
+        metadata = _invoice_filename_metadata(name)
+        if metadata.get("invoice_amount") and not invoice.get("invoice_amount"):
+            invoice["invoice_amount"] = metadata["invoice_amount"]
+        if metadata.get("invoice_date"):
+            invoice["invoice_date"] = metadata["invoice_date"]
+        if metadata.get("invoice_merchant") and (
+            not _usable_invoice_merchant(invoice.get("invoice_merchant", ""))
+            or "深圳市源创鑫环保科技有限公司" in invoice.get("invoice_merchant", "")
+        ):
+            invoice["invoice_merchant"] = metadata["invoice_merchant"]
+        if metadata.get("invoice_item") and not invoice.get("invoice_item"):
+            invoice["invoice_item"] = metadata["invoice_item"]
+        invoices.append(invoice)
     rows: list[dict[str, str]] = []
     matched_invoice_sources: set[str] = set()
     for source_name, lines in documents:
