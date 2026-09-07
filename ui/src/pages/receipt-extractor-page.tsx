@@ -18,7 +18,7 @@ export function ReceiptExtractorPage() {
   const [workerCount, setWorkerCount] = useState(2);
   const [reportTitle, setReportTitle] = useState("");
   const [manualEntries, setManualEntries] = useState<ManualEntry[]>([]);
-  const [manualDraft, setManualDraft] = useState<ManualEntry>({ 金额: "", 日期: "", 商家: "", 用途: "", 备注: "" });
+  const [manualText, setManualText] = useState("");
   const [token, setToken] = useState(getSavedApiToken());
   const [result, setResult] = useState<{ job_id: string; columns: string[]; rows: Array<Record<string, string>> } | null>(null);
   const [progress, setProgress] = useState<ReceiptProgress | null>(null);
@@ -104,10 +104,12 @@ export function ReceiptExtractorPage() {
       </div> : null}
       <div className="panel receipt-manual">
         <div className="panel-header"><div><h3>手工补录（无支付记录）</h3><p className="muted-text">用于只有口头/纸面费用、没有支付截图或发票的项目；导出时单独标记为“手工补录”。</p></div></div>
-        <div className="receipt-actions">
-          {([['金额','金额'],['日期','日期'],['商家','商家'],['用途','用途'],['备注','备注']] as const).map(([key, label]) => <input key={key} className="text-input" placeholder={label} value={manualDraft[key]} onChange={(e) => setManualDraft({ ...manualDraft, [key]: e.target.value })} />)}
-          <button className="secondary-button" type="button" onClick={() => { if (!manualDraft.金额 || Number.isNaN(Number(manualDraft.金额))) { setNotice({ tone: "error", text: "手工补录金额必须是数字。" }); return; } setManualEntries([...manualEntries, manualDraft]); setManualDraft({ 金额: "", 日期: "", 商家: "", 用途: "", 备注: "" }); }}>添加补录</button>
-        </div>
+        <textarea className="text-input receipt-columns" value={manualText} onChange={(e) => setManualText(e.target.value)} placeholder={'一行一笔，格式：金额，日期，商家，用途，备注\n例如：150，2026-09-07，某餐馆，工作餐，'} />
+        <div className="receipt-actions"><span className="field-hint">金额必填，其余字段可留空；支持一次粘贴多行。</span><button className="secondary-button" type="button" onClick={() => {
+          const parsed: ManualEntry[] = []; const invalid: string[] = [];
+          manualText.split(/\r?\n/).map((line) => line.trim()).filter(Boolean).forEach((line) => { const parts = line.split(/[，,]/).map((item) => item.trim()); const amount = parts[0] || ""; if (!amount || Number.isNaN(Number(amount))) { invalid.push(line); return; } parsed.push({ 金额: amount, 日期: parts[1] || "", 商家: parts[2] || "", 用途: parts[3] || "", 备注: parts.slice(4).join(",") }); });
+          if (invalid.length) { setNotice({ tone: "error", text: `以下行的金额无效：${invalid[0]}` }); return; } if (parsed.length) { setManualEntries([...manualEntries, ...parsed]); setManualText(""); setNotice({ tone: "success", text: `已添加 ${parsed.length} 笔手工补录。` }); }
+        }}>批量添加</button></div>
         {manualEntries.length ? <div className="table-shell"><table className="data-table"><thead><tr><th>金额</th><th>日期</th><th>商家</th><th>用途</th><th>备注</th><th>操作</th></tr></thead><tbody>{manualEntries.map((item, i) => <tr key={`${item.金额}-${i}`}><td>{item.金额}</td><td>{item.日期}</td><td>{item.商家}</td><td>{item.用途}</td><td>{item.备注}</td><td><button className="secondary-button" type="button" onClick={() => setManualEntries(manualEntries.filter((_, index) => index !== i))}>删除</button></td></tr>)}</tbody></table></div> : null}
       </div>
       <div className="panel receipt-history"><div className="panel-header"><div><h3>本地历史记录</h3><p className="muted-text">记录保存在 Ubuntu 本地，不上传云端。</p></div></div>{history.length === 0 ? <p className="muted-text">暂无历史批次</p> : <div className="table-shell"><table className="data-table"><thead><tr><th>名称</th><th>处理时间</th><th>图片数</th><th>结果行数</th><th>操作</th></tr></thead><tbody>{history.map((item) => <tr key={item.job_id}><td>{item.title}</td><td>{new Date(item.created_at).toLocaleString()}</td><td>{item.total}</td><td>{item.rows.length}</td><td><button className="secondary-button" type="button" onClick={() => setResult({ job_id: item.job_id, columns: item.columns, rows: item.rows })}>查看</button> <button className="secondary-button" type="button" onClick={() => { const title = window.prompt("请输入历史记录名称", item.title); if (title?.trim()) void renameReceiptHistory(item.job_id, title.trim()).then(() => setHistory((items) => items.map((x) => x.job_id === item.job_id ? { ...x, title: title.trim() } : x))); }}>重命名</button> <button className="secondary-button" type="button" onClick={() => void deleteReceiptHistory(item.job_id).then(() => setHistory((items) => items.filter((x) => x.job_id !== item.job_id)))}>删除</button></td></tr>)}</tbody></table></div>}</div>
