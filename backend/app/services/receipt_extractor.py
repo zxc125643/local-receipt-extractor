@@ -225,9 +225,14 @@ def _invoice_filename_metadata(source: str) -> dict[str, str]:
     amount = re.search(r"[-_](\d+(?:\.\d{1,2})?)\.pdf$", name, re.IGNORECASE)
     if amount:
         metadata["invoice_amount"] = f"{float(amount.group(1)):.2f}"
-    date = re.search(r"(20\d{2})年?(\d{1,2})月?(\d{1,2})日?", name)
+    date = re.search(r"(20\d{2})年(\d{1,2})月(\d{1,2})日", name)
     if date:
         metadata["invoice_date"] = f"{date.group(1)}-{int(date.group(2)):02d}-{int(date.group(3)):02d}"
+    else:
+        compact_date = re.search(r"_(20\d{6,12})(?:\.|_)", name)
+        if compact_date:
+            digits = compact_date.group(1)
+            metadata["invoice_date"] = f"{digits[:4]}-{digits[4:6]}-{digits[6:8]}"
     seller = re.search(r"^dzfp_[^_]+_(.+?)_20\d{6,14}(?:\.|_)", name, re.IGNORECASE)
     if seller:
         metadata["invoice_merchant"] = seller.group(1)
@@ -329,6 +334,8 @@ def build_payment_rows(columns: Sequence[str], documents: Sequence[tuple[str, OC
         if metadata.get("invoice_date"):
             invoice["invoice_date"] = metadata["invoice_date"]
         if metadata.get("invoice_merchant") and (
+            metadata["invoice_merchant"] == "通行费"
+            or
             not _usable_invoice_merchant(invoice.get("invoice_merchant", ""))
             or "深圳市源创鑫环保科技有限公司" in invoice.get("invoice_merchant", "")
         ):
