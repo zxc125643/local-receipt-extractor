@@ -13,12 +13,20 @@ from queue import Queue
 
 from openpyxl import Workbook, load_workbook
 from openpyxl.drawing.image import Image as ExcelImage
+from openpyxl.cell.cell import ILLEGAL_CHARACTERS_RE
 from openpyxl.styles import Border, Font, PatternFill, Side
 
 
 OCRLines = Sequence[str]
 OcrReader = Callable[[bytes], OCRLines]
 AMOUNT_PATTERN = r"\d+(?:,\d{3})*\.\d{2}"
+
+
+def _excel_safe(value: object) -> object:
+    """Strip control characters rejected by openpyxl from OCR output."""
+    if isinstance(value, str):
+        return ILLEGAL_CHARACTERS_RE.sub("", value)
+    return value
 
 
 def normalize_column_name(value: str) -> str:
@@ -536,7 +544,7 @@ def create_reimbursement_workbook(rows: Sequence[dict[str, str]], payment_images
         values = [index - 2, date_value, time_value, merchant, amount, expense or classify_expense(row), "仅发票" if invoice_only else ("有票" if invoice_status.startswith("有") else "无票")]
         for column, value in enumerate(values, start=1):
             source = source_sheet.cell(3, column)
-            target = payment_sheet.cell(index, column, value)
+            target = payment_sheet.cell(index, column, _excel_safe(value))
             target._style = copy(source._style)
             target.alignment = copy(source.alignment)
             target.border = copy(source.border)
@@ -632,14 +640,14 @@ def create_reimbursement_workbook(rows: Sequence[dict[str, str]], payment_images
     for invoice in invoice_rows:
         source = invoice.get("_source", "")
         payment = matched_payments.get(source)
-        invoice_sheet.append([
+        invoice_sheet.append([_excel_safe(value) for value in [
             invoice_index - 2,
             payment.get("付款金额", "") if payment else "",
             invoice.get("invoice_amount", ""),
             invoice.get("invoice_number", ""),
             "金额匹配" if payment else "仅发票（无支付记录）",
             payment.get("_invoice_date_warning", "正常") if payment else "需核对",
-        ])
+        ]])
         image_bytes = _lookup_image(invoice_images, source) or _lookup_image(payment_images, source)
         if not image_bytes and payment:
             image_bytes = _lookup_image(payment_images, payment.get("_invoice_source", ""))
@@ -666,7 +674,7 @@ def create_reimbursement_workbook(rows: Sequence[dict[str, str]], payment_images
         for letter, width in {"A": 8, "B": 14, "C": 30, "D": 24, "E": 14, "F": 22, "G": 22}.items():
             standalone.column_dimensions[letter].width = width
         for index, row in enumerate(standalone_rows, start=3):
-            standalone.append([index - 2, row.get("_invoice_date", ""), row.get("_invoice_merchant", ""), row.get("_invoice_item", "") or "发票单独报销", float(row.get("_invoice_amount", "0") or 0), row.get("_invoice_number", "")])
+            standalone.append([_excel_safe(value) for value in [index - 2, row.get("_invoice_date", ""), row.get("_invoice_merchant", ""), row.get("_invoice_item", "") or "发票单独报销", float(row.get("_invoice_amount", "0") or 0), row.get("_invoice_number", "")]])
             image_bytes = _lookup_image(invoice_images, row.get("源文件", "")) or _lookup_image(payment_images, row.get("源文件", ""))
             _add_compact_image(standalone, f"G{index}", image_bytes, 150, 125)
             for cell in standalone[index]:
