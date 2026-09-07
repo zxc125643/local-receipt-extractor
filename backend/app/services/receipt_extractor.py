@@ -559,7 +559,10 @@ def create_reimbursement_workbook(rows: Sequence[dict[str, str]], payment_images
     payment_sheet.row_dimensions[2].height = max(28, source_sheet.row_dimensions[2].height or 28)
     prefix = str(source_sheet["A1"].value or "刘生费用报销单").split("（", 1)[0].split("(", 1)[0]
     period = reimbursement_period(rows)
-    payment_sheet["A1"] = title_override.strip() or (f"{prefix}（{period}）" if period else prefix)
+    custom_title = title_override.strip()
+    if custom_title and period and not re.search(r'20\d{2}.*20\d{2}', custom_title):
+        custom_title = f'{custom_title}（{period}）'
+    payment_sheet["A1"] = custom_title or (f"{prefix}（{period}）" if period else prefix)
 
     for index, row in enumerate(payment_rows, start=3):
         invoice_only = bool(row.get("_invoice_only"))
@@ -723,14 +726,17 @@ def create_reimbursement_workbook(rows: Sequence[dict[str, str]], payment_images
     output = BytesIO(); workbook.save(output); return output.getvalue()
 
 
-def reimbursement_workbook_title(rows: Sequence[dict[str, str]]) -> str:
+def reimbursement_workbook_title(rows: Sequence[dict[str, str]], title_override: str = "") -> str:
     """Return the same title text written into the workbook's first row."""
     template_path = Path(__file__).resolve().parents[2] / "templates" / "reimbursement-template.xlsx"
     workbook = load_workbook(template_path, read_only=True)
     raw = str(workbook["支付明细"]["A1"].value or "刘生费用报销单")
     prefix = raw.split("（", 1)[0].split("(", 1)[0]
     period = reimbursement_period(rows)
-    return f"{prefix}（{period}）" if period else prefix
+    custom_title = title_override.strip()
+    if custom_title and period and not re.search(r'20\d{2}.*20\d{2}', custom_title):
+        custom_title = f'{custom_title}（{period}）'
+    return custom_title or (f"{prefix}（{period}）" if period else prefix)
 
 
 class LocalReceiptExtractor:

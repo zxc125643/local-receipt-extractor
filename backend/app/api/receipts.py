@@ -261,7 +261,7 @@ async def export_receipts(payload: dict[str, object]) -> Response:
     content = create_reimbursement_workbook(job.rows, job.payment_images, job.invoice_images, job.invoices, requested_title, manual_entries)
     import re
     from urllib.parse import quote
-    title = re.sub(r'[\\/:*?"<>|\r\n]+', "_", requested_title or reimbursement_workbook_title(job.rows)).strip(" .") or "费用报销单"
+    title = re.sub(r'[\\/:*?"<>|\r\n]+', "_", reimbursement_workbook_title(job.rows, requested_title)).strip(" .") or "费用报销单"
     return Response(
         content=content,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
