@@ -181,9 +181,15 @@ def extract_known_fields(lines: OCRLines) -> dict[str, str]:
                 if label in line and i + 1 < len(cleaned):
                     return cleaned[i + 1].strip()
             return ""
-        fare_match = re.search(r"票价\s*[：:]?\s*(?:票)?\s*[￥¥]?\s*([0-9]+(?:\.\d{1,2})?)", text)
-        fare = fare_match.group(1) if fare_match else (re.search(r"票\s*([0-9]+(?:\.\d{1,2})?)", text) or ["", ""])[1]
-        date_match = re.search(r"(20\d{2})\s*[-/]\s*(\d{1,2})\s*[-/]\s*(\d{1,2})", text) or re.search(r"(20\d{2})年(\d{1,2})月(\d{1,2})日?", text)
+        fare = ""
+        for i, line in enumerate(cleaned):
+            fare_match = re.search(r"^(?:票价|票)\s*[：:]?\s*[￥¥]?\s*([0-9]+(?:\.\d{1,2})?)$", line)
+            if fare_match:
+                fare = fare_match.group(1); break
+            if line in {"票价", "票价："} and i + 1 < len(cleaned):
+                next_amount = re.search(r"([0-9]+(?:\.\d{1,2})?)", cleaned[i + 1])
+                if next_amount: fare = next_amount.group(1); break
+        date_match = re.search(r"(?:乘车日期)?\s*(20\d{2})\s*[-/]\s*(\d{1,2})\s*[-/]\s*(\d{1,2})", text) or re.search(r"(20\d{2})年(\d{1,2})月(\d{1,2})日?", text)
         ticket_match = re.search(r"(?:发票号码|票号)\s*[:：]?\s*([A-Za-z0-9]{6,})", text)
         train = labelled("班次")
         if not train.isdigit():
