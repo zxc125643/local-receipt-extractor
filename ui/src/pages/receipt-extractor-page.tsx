@@ -24,6 +24,8 @@ export function ReceiptExtractorPage() {
   const [progress, setProgress] = useState<ReceiptProgress | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [history, setHistory] = useState<ReceiptHistory[]>([]);
+  useEffect(() => { try { const saved = window.localStorage.getItem("receipt-manual-entries"); if (saved) setManualEntries(JSON.parse(saved) as ManualEntry[]); } catch { /* ignore malformed local data */ } }, []);
+  useEffect(() => { window.localStorage.setItem("receipt-manual-entries", JSON.stringify(manualEntries)); }, [manualEntries]);
   useEffect(() => { void getReceiptHistory().then(setHistory).catch(() => undefined); }, []);
   const processMutation = useMutation({
     mutationFn: ({ columns, files, workerCount, title }: { columns: string[]; files: File[]; workerCount: number; title: string }) => processReceiptImages({ columns, files, workerCount, title }, setProgress),
