@@ -399,7 +399,7 @@ def build_payment_rows(columns: Sequence[str], documents: Sequence[tuple[str, OC
     rows: list[dict[str, str]] = []
     matched_invoice_sources: set[str] = set()
     for source_name, lines in documents:
-        if is_invoice(lines):
+        if is_invoice(lines) and not _is_train_ticket(lines):
             continue
         row = build_row(result_columns, lines, source_name)
         payment_amount = row.get("付款金额") or row.get("支付金额") or row.get("交易金额") or row.get("金额") or ""
