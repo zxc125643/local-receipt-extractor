@@ -606,7 +606,7 @@ def create_reimbursement_workbook(rows: Sequence[dict[str, str]], payment_images
     prefix = str(source_sheet["A1"].value or "刘生费用报销单").split("（", 1)[0].split("(", 1)[0]
     period = reimbursement_period(rows)
     custom_title = title_override.strip()
-    if custom_title and period and not re.search(r'20\d{2}.*20\d{2}', custom_title):
+    if custom_title and period and not re.search(r'20\d{2}', custom_title):
         custom_title = f'{custom_title}（{period}）'
     payment_sheet["A1"] = custom_title or (f"{prefix}（{period}）" if period else prefix)
 
@@ -788,7 +788,7 @@ def reimbursement_workbook_title(rows: Sequence[dict[str, str]], title_override:
     prefix = raw.split("（", 1)[0].split("(", 1)[0]
     period = reimbursement_period(rows)
     custom_title = title_override.strip()
-    if custom_title and period and not re.search(r'20\d{2}.*20\d{2}', custom_title):
+    if custom_title and period and not re.search(r'20\d{2}', custom_title):
         custom_title = f'{custom_title}（{period}）'
     return custom_title or (f"{prefix}（{period}）" if period else prefix)
 
