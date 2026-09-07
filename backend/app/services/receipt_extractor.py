@@ -175,9 +175,16 @@ def extract_known_fields(lines: OCRLines) -> dict[str, str]:
     personal_payee, personal_description = _personal_payment_title(cleaned)
     title_merchant = _unlabelled_merchant_title(cleaned)
 
+    labelled_time = re.search(r'(?:支付时间|付款时间|转账时间)\s*[:：]?\s*([\s\S]{0,45})', text)
+    refund = re.search(r'已退款\s*[（(]?\s*[¥￥]?\s*('+AMOUNT_PATTERN+r')', text)
+    from decimal import Decimal
+    gross = amount_match.group(1).replace(',', '') if amount_match else ''
+    net = gross
+    if gross and refund and Decimal(refund.group(1)) <= Decimal(gross):
+        net = str(Decimal(gross) - Decimal(refund.group(1)))
     return {
-        "payment_amount": amount_match.group(1).replace(",", "") if amount_match else "",
-        "payment_time": _payment_time(text),
+        "payment_amount": net,
+        "payment_time": _payment_time(labelled_time.group(1)) if labelled_time else _payment_time(text),
         "merchant_name": _next_value(cleaned, {"商户全称", "收款方", "商家名称", "商户"}) or personal_payee or title_merchant,
         "product_name": _next_value(cleaned, {"商品", "商品名称", "订单内容"}) or personal_description or title_merchant,
         "transaction_number": transaction_match.group(1) if transaction_match else "",
@@ -204,6 +211,10 @@ def extract_invoice_fields(lines: OCRLines) -> dict[str, str]:
     number_match = re.search(r"(?:发票号码|发票号)\s*[:：]?\s*([A-Za-z0-9]{6,})", text)
     invoice_number = number_match.group(1) if number_match else next((line for line in cleaned if re.fullmatch(r"\d{16,24}", line)), "")
     merchant = _invoice_seller(cleaned)
+    service_time = ''
+    if '通行费' in text:
+        times = re.findall(r'20\d{2}\s*[-年/]\s*\d{1,2}\s*[-月/]\s*\d{1,2}(?:日)?\s+\d{1,2}:\d{2}:\d{2}', text)
+        service_time = _payment_time(times[-1]) if times else ''
     item_candidates = [
         line for line in cleaned
         if len(line) < 80
@@ -218,6 +229,7 @@ def extract_invoice_fields(lines: OCRLines) -> dict[str, str]:
         "invoice_date": _payment_time(text),
         "invoice_merchant": merchant,
         "invoice_item": invoice_item,
+        "service_time": service_time,
     }
 
 
@@ -339,7 +351,7 @@ def build_payment_rows(columns: Sequence[str], documents: Sequence[tuple[str, OC
         metadata = _invoice_filename_metadata(name)
         if metadata.get("invoice_amount") and not invoice.get("invoice_amount"):
             invoice["invoice_amount"] = metadata["invoice_amount"]
-        if metadata.get("invoice_date"):
+        if metadata.get("invoice_date") and not invoice.get("invoice_date"):
             invoice["invoice_date"] = metadata["invoice_date"]
         if metadata.get("invoice_merchant") and (
             metadata["invoice_merchant"] == "通行费"
@@ -367,9 +379,16 @@ def build_payment_rows(columns: Sequence[str], documents: Sequence[tuple[str, OC
             for key in ("商家名称", "收款方", "商品", "商品名称", "备注")
         )
         def is_match(invoice: dict[str, str]) -> bool:
+            if invoice['_source'] in matched_invoice_sources:
+                return False
             if not payment_amount or invoice["invoice_amount"] != payment_amount:
                 return False
             invoice_date = _date_text(invoice.get("invoice_date", ""))
+            if invoice.get('service_time') and '通行费' in invoice.get('invoice_item', ''):
+                try:
+                    return abs((datetime.fromisoformat(row.get('付款时间','')) - datetime.fromisoformat(invoice['service_time'])).total_seconds()) <= 120
+                except ValueError:
+                    return False
             invoice_merchant = _usable_invoice_merchant(invoice.get("invoice_merchant", ""))
             date_known = bool(payment_date and invoice_date)
             merchant_known = bool(payment_merchant and invoice_merchant)
@@ -384,6 +403,8 @@ def build_payment_rows(columns: Sequence[str], documents: Sequence[tuple[str, OC
                 or bool(meaningful_common)
             )
             if date_known and merchant_known:
+                if merchant_ok and '住宿' in invoice.get('invoice_item', ''):
+                    return 0 <= (datetime(*invoice_date)-datetime(*payment_date)).days <= 7
                 return date_ok and merchant_ok
             return date_ok or merchant_ok
         matched = next((invoice for invoice in invoices if is_match(invoice)), None)
@@ -764,7 +785,7 @@ class LocalReceiptExtractor:
 
             reader = PdfReader(BytesIO(image_bytes))
             text_lines = [line.strip() for page in reader.pages for line in (page.extract_text() or "").splitlines() if line.strip()]
-            if text_lines:
+            if text_lines and not is_invoice(text_lines):
                 return text_lines
             # Scanned/image-only PDFs have no text layer; render the first page
             # and send it through the same local OCR pipeline as screenshots.
