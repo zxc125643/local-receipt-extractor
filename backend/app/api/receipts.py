@@ -255,7 +255,10 @@ async def export_receipts(payload: dict[str, object]) -> Response:
     if job.status != "completed":
         raise HTTPException(status_code=422, detail="图片仍在识别中，请等待处理完成。")
     requested_title = str(payload.get('title', '')).strip()[:120] or job.title
-    content = create_reimbursement_workbook(job.rows, job.payment_images, job.invoice_images, job.invoices, requested_title)
+    manual_entries = payload.get('manual_entries', [])
+    if not isinstance(manual_entries, list):
+        raise HTTPException(status_code=422, detail="手工补录格式无效。")
+    content = create_reimbursement_workbook(job.rows, job.payment_images, job.invoice_images, job.invoices, requested_title, manual_entries)
     import re
     from urllib.parse import quote
     title = re.sub(r'[\\/:*?"<>|\r\n]+', "_", requested_title or reimbursement_workbook_title(job.rows)).strip(" .") or "费用报销单"

@@ -520,12 +520,21 @@ def _lookup_image(images: dict[str, bytes], source: str) -> bytes | None:
     return None
 
 
-def create_reimbursement_workbook(rows: Sequence[dict[str, str]], payment_images: dict[str, bytes], invoice_images: dict[str, bytes], invoice_rows: Sequence[dict[str, str]] | None = None, title_override: str = "") -> bytes:
+def create_reimbursement_workbook(rows: Sequence[dict[str, str]], payment_images: dict[str, bytes], invoice_images: dict[str, bytes], invoice_rows: Sequence[dict[str, str]] | None = None, title_override: str = "", manual_entries: Sequence[dict[str, str]] | None = None) -> bytes:
     """Writes a compact, filled-only reimbursement workbook based on the supplied layout."""
     template_path = Path(__file__).resolve().parents[2] / "templates" / "reimbursement-template.xlsx"
     # All reimbursable items are summarized in payment detail.  Invoice-only
     # rows remain visibly distinct through their status and source fields.
-    payment_rows = list(rows)
+    payment_rows = list(rows) + [{
+        "源文件": "手工补录",
+        "付款金额": str(item.get("金额", "")),
+        "付款时间": str(item.get("日期", "")),
+        "商家名称": str(item.get("商家", "")),
+        "商品名称": str(item.get("用途", "")),
+        "备注": str(item.get("备注", "")),
+        "是否有发票": "手工补录",
+        "_manual": "1",
+    } for item in (manual_entries or []) if str(item.get("金额", "")).strip()]
     standalone_rows = []
     workbook = load_workbook(template_path)
     source_sheet = workbook["支付明细"]
@@ -564,7 +573,7 @@ def create_reimbursement_workbook(rows: Sequence[dict[str, str]], payment_images
         invoice_status = row.get("是否有发票", "")
         merchant = row.get("商家名称") or row.get("收款方") or (row.get("_invoice_merchant") if invoice_only else "") or ""
         expense = row.get("_invoice_item") if invoice_only else ""
-        values = [index - 2, date_value, time_value, merchant, amount, expense or classify_expense(row), "仅发票" if invoice_only else ("有票" if invoice_status.startswith("有") else "无票")]
+        values = [index - 2, date_value, time_value, merchant, amount, expense or (str(row.get("备注", "")) if row.get("_manual") else classify_expense(row)), "手工补录" if row.get("_manual") else ("仅发票" if invoice_only else ("有票" if invoice_status.startswith("有") else "无票"))]
         for column, value in enumerate(values, start=1):
             source = source_sheet.cell(3, column)
             target = payment_sheet.cell(index, column, _excel_safe(value))

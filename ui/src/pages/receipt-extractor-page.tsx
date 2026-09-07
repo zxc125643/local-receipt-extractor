@@ -5,6 +5,7 @@ import { deleteReceiptHistory, downloadReceiptWorkbook, getReceiptHistory, getSa
 
 type Notice = { tone: "success" | "error" | "info"; text: string };
 type ReceiptProgress = { completed: number; total: number; currentFile: string; status: string };
+type ManualEntry = { 金额: string; 日期: string; 商家: string; 用途: string; 备注: string };
 
 function splitColumns(value: string) {
   return value.split(/[，,、\n]/).map((item) => item.trim()).filter(Boolean);
@@ -16,6 +17,8 @@ export function ReceiptExtractorPage() {
   const [files, setFiles] = useState<File[]>([]);
   const [workerCount, setWorkerCount] = useState(2);
   const [reportTitle, setReportTitle] = useState("");
+  const [manualEntries, setManualEntries] = useState<ManualEntry[]>([]);
+  const [manualDraft, setManualDraft] = useState<ManualEntry>({ 金额: "", 日期: "", 商家: "", 用途: "", 备注: "" });
   const [token, setToken] = useState(getSavedApiToken());
   const [result, setResult] = useState<{ job_id: string; columns: string[]; rows: Array<Record<string, string>> } | null>(null);
   const [progress, setProgress] = useState<ReceiptProgress | null>(null);
@@ -94,10 +97,19 @@ export function ReceiptExtractorPage() {
       {result ? <div className="panel receipt-results">
         <div className="panel-header">
           <div><h3>提取预览</h3><p className="muted-text">空白字段表示本地 OCR 未能可靠定位，请直接核对后导出。</p></div>
-          <button className="primary-button" type="button" onClick={() => void downloadReceiptWorkbook({ ...result, title: reportTitle }).catch((error) => setNotice({ tone: "error", text: error instanceof Error ? error.message : "导出失败。" }))}>导出 Excel</button>
+          <button className="primary-button" type="button" onClick={() => void downloadReceiptWorkbook({ ...result, title: reportTitle, manual_entries: manualEntries }).catch((error) => setNotice({ tone: "error", text: error instanceof Error ? error.message : "导出失败。" }))}>导出 Excel</button>
         </div>
+        {manualEntries.length ? <p className="muted-text">金额组成：识别记录 {result.rows.reduce((s, r) => s + (Number(r["付款金额"]) || 0), 0).toFixed(2)} + 手工补录 {manualEntries.reduce((s, r) => s + (Number(r.金额) || 0), 0).toFixed(2)} = 总计 {(result.rows.reduce((s, r) => s + (Number(r["付款金额"]) || 0), 0) + manualEntries.reduce((s, r) => s + (Number(r.金额) || 0), 0)).toFixed(2)}</p> : null}
         <div className="table-shell"><table className="data-table"><thead><tr><th>源文件</th>{result.columns.map((column) => <th key={column}>{column}</th>)}</tr></thead><tbody>{result.rows.map((row, index) => <tr key={`${row["源文件"]}-${index}`}><td>{row["源文件"]}</td>{result.columns.map((column) => <td key={column}>{row[column] || "—"}</td>)}</tr>)}</tbody></table></div>
       </div> : null}
+      <div className="panel receipt-manual">
+        <div className="panel-header"><div><h3>手工补录（无支付记录）</h3><p className="muted-text">用于只有口头/纸面费用、没有支付截图或发票的项目；导出时单独标记为“手工补录”。</p></div></div>
+        <div className="receipt-actions">
+          {([['金额','金额'],['日期','日期'],['商家','商家'],['用途','用途'],['备注','备注']] as const).map(([key, label]) => <input key={key} className="text-input" placeholder={label} value={manualDraft[key]} onChange={(e) => setManualDraft({ ...manualDraft, [key]: e.target.value })} />)}
+          <button className="secondary-button" type="button" onClick={() => { if (!manualDraft.金额 || Number.isNaN(Number(manualDraft.金额))) { setNotice({ tone: "error", text: "手工补录金额必须是数字。" }); return; } setManualEntries([...manualEntries, manualDraft]); setManualDraft({ 金额: "", 日期: "", 商家: "", 用途: "", 备注: "" }); }}>添加补录</button>
+        </div>
+        {manualEntries.length ? <div className="table-shell"><table className="data-table"><thead><tr><th>金额</th><th>日期</th><th>商家</th><th>用途</th><th>备注</th><th>操作</th></tr></thead><tbody>{manualEntries.map((item, i) => <tr key={`${item.金额}-${i}`}><td>{item.金额}</td><td>{item.日期}</td><td>{item.商家}</td><td>{item.用途}</td><td>{item.备注}</td><td><button className="secondary-button" type="button" onClick={() => setManualEntries(manualEntries.filter((_, index) => index !== i))}>删除</button></td></tr>)}</tbody></table></div> : null}
+      </div>
       <div className="panel receipt-history"><div className="panel-header"><div><h3>本地历史记录</h3><p className="muted-text">记录保存在 Ubuntu 本地，不上传云端。</p></div></div>{history.length === 0 ? <p className="muted-text">暂无历史批次</p> : <div className="table-shell"><table className="data-table"><thead><tr><th>名称</th><th>处理时间</th><th>图片数</th><th>结果行数</th><th>操作</th></tr></thead><tbody>{history.map((item) => <tr key={item.job_id}><td>{item.title}</td><td>{new Date(item.created_at).toLocaleString()}</td><td>{item.total}</td><td>{item.rows.length}</td><td><button className="secondary-button" type="button" onClick={() => setResult({ job_id: item.job_id, columns: item.columns, rows: item.rows })}>查看</button> <button className="secondary-button" type="button" onClick={() => { const title = window.prompt("请输入历史记录名称", item.title); if (title?.trim()) void renameReceiptHistory(item.job_id, title.trim()).then(() => setHistory((items) => items.map((x) => x.job_id === item.job_id ? { ...x, title: title.trim() } : x))); }}>重命名</button> <button className="secondary-button" type="button" onClick={() => void deleteReceiptHistory(item.job_id).then(() => setHistory((items) => items.filter((x) => x.job_id !== item.job_id)))}>删除</button></td></tr>)}</tbody></table></div>}</div>
     </section>
   );

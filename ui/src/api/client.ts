@@ -282,7 +282,7 @@ export async function processReceiptImages(payload: { columns: string[]; files: 
   }
 }
 
-export async function downloadReceiptWorkbook(payload: { job_id: string; columns: string[]; rows: Array<Record<string, string>>; title?: string }) {
+export async function downloadReceiptWorkbook(payload: { job_id: string; columns: string[]; rows: Array<Record<string, string>>; title?: string; manual_entries?: Array<Record<string, string>> }) {
   const runtime = await getRuntimeConfig();
   const response = await fetch(`${runtime.apiBaseUrl}/receipts/export`, {
     method: "POST",
