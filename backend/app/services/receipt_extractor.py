@@ -174,6 +174,34 @@ def extract_known_fields(lines: OCRLines) -> dict[str, str]:
     transaction_match = re.search(r"(?:交易单号|订单号|交易号|转账单号)\s*[:：]?\s*([A-Za-z0-9]{8,})", text)
     personal_payee, personal_description = _personal_payment_title(cleaned)
     title_merchant = _unlabelled_merchant_title(cleaned)
+    train_ticket = "湖北省道路客运发票" in text or ("乘车日期" in text and "票价" in text)
+    if train_ticket:
+        def next_after(label: str) -> str:
+            for i, line in enumerate(cleaned):
+                if label in line and i + 1 < len(cleaned):
+                    value = cleaned[i + 1].replace("：", "").replace(":", "").strip()
+                    if value and value not in {"检票口", "座位号", "班次", "票价"}:
+                        return value
+            return ""
+        fare = re.search(r"票价\s*[：:]?\s*(?:票)?\s*[￥¥]?\s*([0-9]+(?:\.\d{1,2})?)", text)
+        date = re.search(r"(20\d{2})[-年/月](\d{1,2})[-月日](\d{1,2})", text)
+        if not date:
+            date = re.search(r"(20\d{2})[-年/](\d{1,2})[-月/](\d{1,2})", text)
+        ticket = re.search(r"(?:发票号码|票号)\s*[:：]?\s*([A-Za-z0-9]{6,})", text)
+        fields = {
+            "payment_amount": fare.group(1) if fare else re.sub(r"[^0-9.]", "", next_after("票价")),
+            "payment_time": f"{date.group(1)}-{int(date.group(2)):02d}-{int(date.group(3)):02d}" if date else "",
+            "merchant_name": "湖北省道路客运",
+            "product_name": "客运车票",
+            "transaction_number": ticket.group(1) if ticket else "",
+            "invoice_number": ticket.group(1) if ticket else "",
+            "departure_station": next_after("始发站") or next((line for line in cleaned if line.endswith("客运站")), ""),
+            "arrival_station": next_after("到达站") or next((line for line in cleaned if line in {"孝感", "孝昌", "远安"}), ""),
+            "train_number": next_after("班次"),
+            "seat_number": next_after("座位号"),
+            "ticket_price": fare.group(1) if fare else re.sub(r"[^0-9.]", "", next_after("票价")),
+        }
+        return fields
 
     labelled_time = re.search(r'(?:支付时间|付款时间|转账时间)\s*[:：]?\s*([\s\S]{0,45})', text)
     refund = re.search(r'已退款\s*[（(]?\s*[¥￥]?\s*('+AMOUNT_PATTERN+r')', text)
@@ -298,6 +326,11 @@ def reimbursement_period(rows: Sequence[dict[str, str]]) -> str:
     return f"{format_date(first)}-{format_date(last)}"
 
 
+def _is_train_ticket(lines: OCRLines) -> bool:
+    text = re.sub(r"\s+", "", "\n".join(lines))
+    return "湖北省道路客运发票" in text or ("乘车日期" in text and "票价" in text)
+
+
 def is_invoice(lines: OCRLines) -> bool:
     text = re.sub(r"\s+", "", "\n".join(lines))
     markers = sum(marker in text for marker in ("发票", "电子发票", "增值税", "价税合计", "税额", "开票日期", "发票号码"))
@@ -326,6 +359,14 @@ COLUMN_ALIASES = {
     "发票号码": "invoice_number",
     "发票号": "invoice_number",
     "发票日期": "invoice_date",
+    "出发站": "departure_station",
+    "始发站": "departure_station",
+    "到达站": "arrival_station",
+    "班次": "train_number",
+    "车次": "train_number",
+    "座位号": "seat_number",
+    "票价": "ticket_price",
+    "票号": "transaction_number",
 }
 
 
@@ -347,7 +388,7 @@ def build_payment_rows(columns: Sequence[str], documents: Sequence[tuple[str, OC
 
     invoices = []
     for name, lines in documents:
-        if not is_invoice(lines):
+        if not is_invoice(lines) or _is_train_ticket(lines):
             continue
         invoice = {**extract_invoice_fields(lines), "_source": name}
         metadata = _invoice_filename_metadata(name)
@@ -368,7 +409,7 @@ def build_payment_rows(columns: Sequence[str], documents: Sequence[tuple[str, OC
     rows: list[dict[str, str]] = []
     matched_invoice_sources: set[str] = set()
     for source_name, lines in documents:
-        if is_invoice(lines):
+        if is_invoice(lines) and not _is_train_ticket(lines):
             continue
         row = build_row(result_columns, lines, source_name)
         payment_amount = row.get("付款金额") or row.get("支付金额") or row.get("交易金额") or row.get("金额") or ""
