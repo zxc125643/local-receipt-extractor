@@ -103,7 +103,7 @@ export function ReceiptExtractorPage() {
         <div className="table-shell"><table className="data-table"><thead><tr><th>源文件</th>{result.columns.map((column) => <th key={column}>{column}</th>)}</tr></thead><tbody>{result.rows.map((row, index) => <tr key={`${row["源文件"]}-${index}`}><td>{row["源文件"]}</td>{result.columns.map((column) => <td key={column}>{row[column] || "—"}</td>)}</tr>)}</tbody></table></div>
       </div> : null}
       <div className="panel receipt-manual">
-        <div className="panel-header"><div><h3>手工补录（无支付记录）</h3><p className="muted-text">用于只有口头/纸面费用、没有支付截图或发票的项目；导出时单独标记为“手工补录”。</p></div></div>
+        <div className="panel-header"><div><h3>手工补录（无票无支付记录）</h3><p className="muted-text">用于没有支付截图、也没有发票的项目；导出类型标记为“无票无支付记录”。</p></div></div>
         <textarea className="text-input receipt-columns" value={manualText} onChange={(e) => setManualText(e.target.value)} placeholder={'一行一笔，格式：金额，日期，商家，用途，备注\n例如：150，2026-09-07，某餐馆，工作餐，'} />
         <div className="receipt-actions"><span className="field-hint">金额必填，其余字段可留空；支持一次粘贴多行。</span><button className="secondary-button" type="button" onClick={() => {
           const parsed: ManualEntry[] = []; const invalid: string[] = [];

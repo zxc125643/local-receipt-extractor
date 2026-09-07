@@ -573,7 +573,7 @@ def create_reimbursement_workbook(rows: Sequence[dict[str, str]], payment_images
         invoice_status = row.get("是否有发票", "")
         merchant = row.get("商家名称") or row.get("收款方") or (row.get("_invoice_merchant") if invoice_only else "") or ""
         expense = row.get("_invoice_item") if invoice_only else ""
-        values = [index - 2, date_value, time_value, merchant, amount, expense or (str(row.get("备注", "")) if row.get("_manual") else classify_expense(row)), "手工补录" if row.get("_manual") else ("仅发票" if invoice_only else ("有票" if invoice_status.startswith("有") else "无票"))]
+        values = [index - 2, date_value, time_value, merchant, amount, expense or (str(row.get("备注", "")) if row.get("_manual") else classify_expense(row)), "无票无支付记录" if row.get("_manual") else ("仅发票" if invoice_only else ("有票" if invoice_status.startswith("有") else "无票"))]
         for column, value in enumerate(values, start=1):
             source = source_sheet.cell(3, column)
             target = payment_sheet.cell(index, column, _excel_safe(value))
