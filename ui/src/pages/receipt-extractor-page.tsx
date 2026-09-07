@@ -104,10 +104,20 @@ export function ReceiptExtractorPage() {
       </div> : null}
       <div className="panel receipt-manual">
         <div className="panel-header"><div><h3>手工补录（无票无支付记录）</h3><p className="muted-text">用于没有支付截图、也没有发票的项目；导出类型标记为“无票无支付记录”。</p></div></div>
-        <textarea className="text-input receipt-columns" value={manualText} onChange={(e) => setManualText(e.target.value)} placeholder={'一行一笔，格式：金额，日期，商家，用途，备注\n例如：150，2026-09-07，某餐馆，工作餐，'} />
+        <textarea className="text-input receipt-columns" value={manualText} onChange={(e) => setManualText(e.target.value)} placeholder={'支持简写：出差餐补320\n车票8+8.43+105+10\n也支持：金额，日期，商家，用途，备注'} />
         <div className="receipt-actions"><span className="field-hint">金额必填，其余字段可留空；支持一次粘贴多行。</span><button className="secondary-button" type="button" onClick={() => {
           const parsed: ManualEntry[] = []; const invalid: string[] = [];
-          manualText.split(/\r?\n/).map((line) => line.trim()).filter(Boolean).forEach((line) => { const parts = line.split(/[，,]/).map((item) => item.trim()); const amount = parts[0] || ""; if (!amount || Number.isNaN(Number(amount))) { invalid.push(line); return; } parsed.push({ 金额: amount, 日期: parts[1] || "", 商家: parts[2] || "", 用途: parts[3] || "", 备注: parts.slice(4).join(",") }); });
+          manualText.split(/\r?\n/).map((line) => line.trim()).filter(Boolean).forEach((line) => {
+            const compact = line.replace(/×/g, "*");
+            const shorthand = compact.match(/^(.+?)([0-9][0-9+.*\/()\-\s]*)$/);
+            if (shorthand && !compact.includes("，") && !compact.includes(",")) {
+              const expression = shorthand[2].replace(/\s+/g, "");
+              if (!/^[0-9+*/().-]+$/.test(expression)) { invalid.push(line); return; }
+              try { const amount = Number(Function(`"use strict"; return (${expression})`)()); if (!Number.isFinite(amount)) throw new Error(); parsed.push({ 金额: amount.toFixed(2), 日期: "", 商家: "", 用途: shorthand[1].trim(), 备注: "" }); } catch { invalid.push(line); }
+              return;
+            }
+            const parts = line.split(/[，,]/).map((item) => item.trim()); const amount = parts[0] || ""; if (!amount || Number.isNaN(Number(amount))) { invalid.push(line); return; } parsed.push({ 金额: amount, 日期: parts[1] || "", 商家: parts[2] || "", 用途: parts[3] || "", 备注: parts.slice(4).join(",") });
+          });
           if (invalid.length) { setNotice({ tone: "error", text: `以下行的金额无效：${invalid[0]}` }); return; } if (parsed.length) { setManualEntries([...manualEntries, ...parsed]); setManualText(""); setNotice({ tone: "success", text: `已添加 ${parsed.length} 笔手工补录。` }); }
         }}>批量添加</button></div>
         {manualEntries.length ? <div className="table-shell"><table className="data-table"><thead><tr><th>金额</th><th>日期</th><th>商家</th><th>用途</th><th>备注</th><th>操作</th></tr></thead><tbody>{manualEntries.map((item, i) => <tr key={`${item.金额}-${i}`}><td>{item.金额}</td><td>{item.日期}</td><td>{item.商家}</td><td>{item.用途}</td><td>{item.备注}</td><td><button className="secondary-button" type="button" onClick={() => setManualEntries(manualEntries.filter((_, index) => index !== i))}>删除</button></td></tr>)}</tbody></table></div> : null}
