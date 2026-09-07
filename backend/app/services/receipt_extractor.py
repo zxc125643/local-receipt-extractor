@@ -625,7 +625,7 @@ def create_reimbursement_workbook(rows: Sequence[dict[str, str]], payment_images
     for letter, width in {"A": 8, "B": 13, "C": 13, "D": 18, "E": 14, "F": 14, "G": 22}.items():
         invoice_sheet.column_dimensions[letter].width = width
     matched_payments = {row.get("_invoice_source", ""): row for row in payment_rows if row.get("_invoice_source") and not row.get("_invoice_only")}
-    if invoice_rows is None:
+    if not invoice_rows:
         invoice_rows = [{
             "_source": source,
             "invoice_amount": payment.get("发票金额", ""),
