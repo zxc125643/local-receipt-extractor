@@ -292,13 +292,14 @@ def classify_expense(row: dict[str, str]) -> str:
     """Assign a conservative reimbursement category from merchant and item text."""
     text = " ".join(
         row.get(key, "")
-        for key in ("商家名称", "收款方", "商户全称", "商品", "商品名称", "备注")
+        for key in ("商家名称", "收款方", "商户全称", "商品", "商品名称", "备注", "_invoice_item", "_invoice_merchant")
     ).lower()
     categories = (
+        ("车票", ("客运发票", "道路客运", "客运车票", "运输服务", "通行费", "车票", "火车", "动车", "高铁", "机票", "航班")),
         ("住宿费", ("酒店", "宾馆", "旅馆", "民宿", "住宿")),
-        ("交通费", ("滴滴", "高德", "打车", "出租", "地铁", "公交", "火车", "动车", "高铁", "机票", "航班", "停车", "加油")),
+        ("交通费", ("滴滴", "高德", "打车", "出租", "地铁", "公交", "停车", "加油")),
         ("工具/材料费", ("工具", "材料", "五金", "办公", "文具", "设备", "配件", "耗材", "采购", "商贸", "建材", "电器")),
-        ("餐费", ("餐", "饭", "食堂", "餐饮", "美团", "饿了么", "咖啡", "奶茶", "便利店")),
+        ("餐票", ("餐", "饭", "食堂", "餐饮", "美团", "饿了么", "咖啡", "奶茶", "便利店")),
     )
     return next((name for name, words in categories if any(word in text for word in words)), "其他")
 
@@ -375,6 +376,8 @@ def build_row(columns: Sequence[str], lines: OCRLines, source_name: str) -> dict
         row[column] = fields.get(key, "") if key else ""
     if _is_train_ticket(lines) and (not fields.get("payment_amount") or not fields.get("payment_time") or not fields.get("transaction_number")):
         row["核对状态"] = "需人工核对"
+    if _is_train_ticket(lines):
+        row["商品名称"] = "客运车票"
     return row
 
 
@@ -766,6 +769,14 @@ def create_reimbursement_workbook(rows: Sequence[dict[str, str]], payment_images
         standalone.cell(total, 5).number_format = "0.00"
         for cell in standalone[total]:
             cell.border = Border(left=table_edge, right=table_edge, top=table_edge, bottom=table_edge)
+    for sheet in workbook.worksheets:
+        for row in sheet.iter_rows():
+            for cell in row:
+                cell.alignment = copy(cell.alignment)
+                cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        for row_number in range(1, sheet.max_row + 1):
+            if row_number > 2 and (sheet.row_dimensions[row_number].height is None or sheet.row_dimensions[row_number].height < 30):
+                sheet.row_dimensions[row_number].height = 36
     output = BytesIO(); workbook.save(output); return output.getvalue()
 
 
