@@ -183,10 +183,10 @@ def extract_known_fields(lines: OCRLines) -> dict[str, str]:
                     if value and value not in {"检票口", "座位号", "班次", "票价"}:
                         return value
             return ""
-        fare = re.search(r"票价\s*[：:]?\s*(?:票)?\s*[￥¥]?\s*([0-9]+(?:\.\d{1,2})?)", text)
-        date = re.search(r"(20\d{2})[-年/月](\d{1,2})[-月日](\d{1,2})", text)
+        fare = re.search(r"(?:票价\s*[：:]?\s*(?:票)?\s*[￥¥]?|票)\s*([0-9]+(?:\.\d{1,2})?)", text)
+        date = re.search(r"(20\d{2})\s*[-/]\s*(\d{1,2})\s*[-/]\s*(\d{1,2})", text)
         if not date:
-            date = re.search(r"(20\d{2})[-年/](\d{1,2})[-月/](\d{1,2})", text)
+            date = re.search(r"(20\d{2})年(\d{1,2})月(\d{1,2})日?", text)
         ticket = re.search(r"(?:发票号码|票号)\s*[:：]?\s*([A-Za-z0-9]{6,})", text)
         fields = {
             "payment_amount": fare.group(1) if fare else re.sub(r"[^0-9.]", "", next_after("票价")),
@@ -197,7 +197,7 @@ def extract_known_fields(lines: OCRLines) -> dict[str, str]:
             "invoice_number": ticket.group(1) if ticket else "",
             "departure_station": next_after("始发站") or next((line for line in cleaned if line.endswith("客运站")), ""),
             "arrival_station": next_after("到达站") or next((line for line in cleaned if line in {"孝感", "孝昌", "远安"}), ""),
-            "train_number": next_after("班次"),
+            "train_number": next_after("班次") if next_after("班次").isdigit() else (re.findall(r"(?<!\d)(\d{3,5})(?!\d)", text)[-1] if re.findall(r"(?<!\d)(\d{3,5})(?!\d)", text) else ""),
             "seat_number": next_after("座位号"),
             "ticket_price": fare.group(1) if fare else re.sub(r"[^0-9.]", "", next_after("票价")),
         }
