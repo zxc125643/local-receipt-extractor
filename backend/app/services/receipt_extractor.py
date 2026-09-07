@@ -373,6 +373,8 @@ def build_row(columns: Sequence[str], lines: OCRLines, source_name: str) -> dict
     for column in columns:
         key = alias_index.get(normalize_column_name(column))
         row[column] = fields.get(key, "") if key else ""
+    if _is_train_ticket(lines) and (not fields.get("payment_amount") or not fields.get("payment_time") or not fields.get("transaction_number")):
+        row["核对状态"] = "需人工核对"
     return row
 
 
@@ -381,6 +383,8 @@ def build_payment_rows(columns: Sequence[str], documents: Sequence[tuple[str, OC
     result_columns = list(columns)
     if "是否有发票" not in result_columns:
         result_columns.append("是否有发票")
+    if any(_is_train_ticket(lines) for _, lines in documents) and "核对状态" not in result_columns:
+        result_columns.append("核对状态")
 
     invoices = []
     for name, lines in documents:
