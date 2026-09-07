@@ -37,6 +37,7 @@ class ReceiptJob:
     worker_count: int = 2
     duplicate_count: int = 0
     duplicate_files: list[str] = field(default_factory=list)
+    title: str = ""
 
 
 jobs: dict[str, ReceiptJob] = {}
@@ -95,6 +96,7 @@ async def process_receipts(
     columns: str = Form(...),
     worker_count: int = Form(2),
     force_reprocess: bool = Form(False),
+    title: str = Form(""),
     files: list[UploadFile] = File(...),
 ) -> dict[str, object]:
     requested_columns = parse_columns(columns)
@@ -128,7 +130,8 @@ async def process_receipts(
 
     get_extractor()
     job_id = str(uuid.uuid4())
-    job = ReceiptJob(total=len(uploaded_images), files=uploaded_images, id=job_id, duplicate_count=len(duplicate_files), duplicate_files=duplicate_files, payment_images=source_images, invoice_images=source_images, worker_count=worker_count)
+    title = title.strip()[:120]
+    job = ReceiptJob(total=len(uploaded_images), files=uploaded_images, id=job_id, duplicate_count=len(duplicate_files), duplicate_files=duplicate_files, payment_images=source_images, invoice_images=source_images, worker_count=worker_count, title=title)
     if uploaded_images:
         job.current_file = uploaded_images[0][0]
     jobs[job_id] = job
@@ -165,7 +168,7 @@ def run_receipt_job_sync(job: ReceiptJob, requested_columns: list[str]) -> None:
         safe_name = hashlib.sha256(name.encode('utf-8')).hexdigest() + Path(name).suffix.lower()
         (image_dir / safe_name).write_bytes(content)
     with sqlite3.connect(_history_db()) as db:
-        db.execute('INSERT OR REPLACE INTO receipt_batches (id, created_at, total, rows_json, title) VALUES (?, ?, ?, ?, ?)', (job.id, datetime.now(timezone.utc).isoformat(), job.total, json.dumps({'columns': job.columns, 'rows': job.rows, 'invoices': job.invoices, 'files': list(job.payment_images)}, ensure_ascii=False), ''))
+        db.execute('INSERT OR REPLACE INTO receipt_batches (id, created_at, total, rows_json, title) VALUES (?, ?, ?, ?, ?)', (job.id, datetime.now(timezone.utc).isoformat(), job.total, json.dumps({'columns': job.columns, 'rows': job.rows, 'invoices': job.invoices, 'files': list(job.payment_images)}, ensure_ascii=False), job.title))
         for content in job.payment_images.values():
             db.execute('INSERT OR IGNORE INTO receipt_image_hashes VALUES (?, ?)', (hashlib.sha256(content).hexdigest(), job.id))
 
@@ -237,7 +240,7 @@ async def export_receipts(payload: dict[str, object]) -> Response:
     job = jobs.get(job_id)
     if job is None:
         with sqlite3.connect(_history_db()) as db:
-            saved = db.execute('SELECT rows_json FROM receipt_batches WHERE id=?', (job_id,)).fetchone()
+            saved = db.execute('SELECT rows_json, title FROM receipt_batches WHERE id=?', (job_id,)).fetchone()
         if not saved:
             raise HTTPException(status_code=422, detail="找不到该历史批次。")
         data = _dedupe_saved(json.loads(saved[0]))
@@ -248,13 +251,14 @@ async def export_receipts(payload: dict[str, object]) -> Response:
             image_path = image_dir / safe_name
             if image_path.exists():
                 files.append((name, image_path.read_bytes()))
-        job = ReceiptJob(total=len(files), files=files, id=job_id, status='completed', columns=data.get('columns', []), rows=data.get('rows', []), invoices=data.get('invoices', []), payment_images=dict(files), invoice_images=dict(files))
+        job = ReceiptJob(total=len(files), files=files, id=job_id, status='completed', columns=data.get('columns', []), rows=data.get('rows', []), invoices=data.get('invoices', []), payment_images=dict(files), invoice_images=dict(files), title=str(saved[1] or ''))
     if job.status != "completed":
         raise HTTPException(status_code=422, detail="图片仍在识别中，请等待处理完成。")
-    content = create_reimbursement_workbook(job.rows, job.payment_images, job.invoice_images, job.invoices)
+    requested_title = str(payload.get('title', '')).strip()[:120] or job.title
+    content = create_reimbursement_workbook(job.rows, job.payment_images, job.invoice_images, job.invoices, requested_title)
     import re
     from urllib.parse import quote
-    title = re.sub(r'[\\/:*?"<>|\r\n]+', "_", reimbursement_workbook_title(job.rows)).strip(" .") or "费用报销单"
+    title = re.sub(r'[\\/:*?"<>|\r\n]+', "_", requested_title or reimbursement_workbook_title(job.rows)).strip(" .") or "费用报销单"
     return Response(
         content=content,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

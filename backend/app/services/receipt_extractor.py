@@ -520,7 +520,7 @@ def _lookup_image(images: dict[str, bytes], source: str) -> bytes | None:
     return None
 
 
-def create_reimbursement_workbook(rows: Sequence[dict[str, str]], payment_images: dict[str, bytes], invoice_images: dict[str, bytes], invoice_rows: Sequence[dict[str, str]] | None = None) -> bytes:
+def create_reimbursement_workbook(rows: Sequence[dict[str, str]], payment_images: dict[str, bytes], invoice_images: dict[str, bytes], invoice_rows: Sequence[dict[str, str]] | None = None, title_override: str = "") -> bytes:
     """Writes a compact, filled-only reimbursement workbook based on the supplied layout."""
     template_path = Path(__file__).resolve().parents[2] / "templates" / "reimbursement-template.xlsx"
     # All reimbursable items are summarized in payment detail.  Invoice-only
@@ -550,7 +550,7 @@ def create_reimbursement_workbook(rows: Sequence[dict[str, str]], payment_images
     payment_sheet.row_dimensions[2].height = max(28, source_sheet.row_dimensions[2].height or 28)
     prefix = str(source_sheet["A1"].value or "刘生费用报销单").split("（", 1)[0].split("(", 1)[0]
     period = reimbursement_period(rows)
-    payment_sheet["A1"] = f"{prefix}（{period}）" if period else prefix
+    payment_sheet["A1"] = title_override.strip() or (f"{prefix}（{period}）" if period else prefix)
 
     for index, row in enumerate(payment_rows, start=3):
         invoice_only = bool(row.get("_invoice_only"))

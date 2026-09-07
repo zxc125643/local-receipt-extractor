@@ -15,6 +15,7 @@ export function ReceiptExtractorPage() {
   const [columnsText, setColumnsText] = useState("付款金额、付款时间、商家名称、备注");
   const [files, setFiles] = useState<File[]>([]);
   const [workerCount, setWorkerCount] = useState(2);
+  const [reportTitle, setReportTitle] = useState("");
   const [token, setToken] = useState(getSavedApiToken());
   const [result, setResult] = useState<{ job_id: string; columns: string[]; rows: Array<Record<string, string>> } | null>(null);
   const [progress, setProgress] = useState<ReceiptProgress | null>(null);
@@ -22,7 +23,7 @@ export function ReceiptExtractorPage() {
   const [history, setHistory] = useState<ReceiptHistory[]>([]);
   useEffect(() => { void getReceiptHistory().then(setHistory).catch(() => undefined); }, []);
   const processMutation = useMutation({
-    mutationFn: ({ columns, files, workerCount }: { columns: string[]; files: File[]; workerCount: number }) => processReceiptImages({ columns, files, workerCount }, setProgress),
+    mutationFn: ({ columns, files, workerCount, title }: { columns: string[]; files: File[]; workerCount: number; title: string }) => processReceiptImages({ columns, files, workerCount, title }, setProgress),
     onSuccess: (data) => {
       setResult(data);
       void getReceiptHistory().then(setHistory).catch(() => undefined);
@@ -45,7 +46,7 @@ export function ReceiptExtractorPage() {
     setResult(null);
     setProgress({ completed: 0, total: files.length, currentFile: "", status: "queued" });
     setNotice({ tone: "info", text: "正在本机识别，图片不会上传到云端。" });
-    processMutation.mutate({ columns, files, workerCount });
+    processMutation.mutate({ columns, files, workerCount, title: reportTitle });
   };
 
   return (
@@ -63,6 +64,11 @@ export function ReceiptExtractorPage() {
       </div>
 
       <div className="panel receipt-form">
+        <label className="filter-field">
+          <span className="field-label">报销单标题 / 导出文件名（可选）</span>
+          <input className="text-input" value={reportTitle} onChange={(event) => setReportTitle(event.target.value)} placeholder="留空则自动按日期生成，例如：张三费用报销单（9月）" />
+          <span className="field-hint">填写后会同时作为 Excel 第一行标题和下载文件名；不填写则继续使用系统自动标题。</span>
+        </label>
         <label className="filter-field">
           <span className="field-label">要提取的列</span>
           <textarea className="text-input receipt-columns" value={columnsText} onChange={(event) => setColumnsText(event.target.value)} />
@@ -88,7 +94,7 @@ export function ReceiptExtractorPage() {
       {result ? <div className="panel receipt-results">
         <div className="panel-header">
           <div><h3>提取预览</h3><p className="muted-text">空白字段表示本地 OCR 未能可靠定位，请直接核对后导出。</p></div>
-          <button className="primary-button" type="button" onClick={() => void downloadReceiptWorkbook(result).catch((error) => setNotice({ tone: "error", text: error instanceof Error ? error.message : "导出失败。" }))}>导出 Excel</button>
+          <button className="primary-button" type="button" onClick={() => void downloadReceiptWorkbook({ ...result, title: reportTitle }).catch((error) => setNotice({ tone: "error", text: error instanceof Error ? error.message : "导出失败。" }))}>导出 Excel</button>
         </div>
         <div className="table-shell"><table className="data-table"><thead><tr><th>源文件</th>{result.columns.map((column) => <th key={column}>{column}</th>)}</tr></thead><tbody>{result.rows.map((row, index) => <tr key={`${row["源文件"]}-${index}`}><td>{row["源文件"]}</td>{result.columns.map((column) => <td key={column}>{row[column] || "—"}</td>)}</tr>)}</tbody></table></div>
       </div> : null}
