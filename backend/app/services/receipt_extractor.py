@@ -213,8 +213,10 @@ def extract_invoice_fields(lines: OCRLines) -> dict[str, str]:
     merchant = _invoice_seller(cleaned)
     service_time = ''
     if '通行费' in text:
-        times = re.findall(r'20\d{2}\s*[-年/]\s*\d{1,2}\s*[-月/]\s*\d{1,2}(?:日)?\s+\d{1,2}:\d{2}:\d{2}', text)
-        service_time = _payment_time(times[-1]) if times else ''
+        times = re.findall(r'(20\d{2})\s*[-年/]\s*(\d{1,2})\s*[-月/]\s*(\d{1,2})(?:日)?\s*(\d{1,2})[：:]?(\d{2})[：:](\d{2})', text)
+        if times:
+            y, mo, d, hh, mm, ss = times[-1]
+            service_time = f'{y}-{int(mo):02d}-{int(d):02d} {int(hh):02d}:{mm}:{ss}'
     item_candidates = [
         line for line in cleaned
         if len(line) < 80
