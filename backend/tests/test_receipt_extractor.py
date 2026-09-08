@@ -16,6 +16,7 @@ from backend.app.services.receipt_extractor import (
     extract_known_fields,
     reimbursement_period,
     reimbursement_workbook_title,
+    parse_manual_draft,
 )
 
 
@@ -177,6 +178,32 @@ def test_same_amount_without_date_or_merchant_evidence_is_not_force_matched():
     assert rows[1]["是否有发票"] == "仅发票（无支付记录）"
 
 
+def test_payment_missing_date_or_merchant_requires_manual_review():
+    columns, rows = build_payment_rows(
+        ["付款金额", "付款时间", "商家名称"],
+        [("payment.jpg", ["付款金额", "88.00", "支付成功"])],
+    )
+
+    assert "核对状态" in columns
+    assert rows[0]["核对状态"] == "需人工核对"
+    assert "付款时间" in rows[0]["_review_reason"]
+    assert "商家名称" in rows[0]["_review_reason"]
+
+
+def test_invoice_does_not_match_when_date_evidence_is_missing():
+    _columns, rows = build_payment_rows(
+        ["付款金额", "付款时间", "商家名称", "发票金额"],
+        [
+            ("payment.jpg", ["付款金额", "550.00", "商户全称", "甲餐饮有限公司"]),
+            ("invoice.jpg", ["电子发票", "价税合计", "550.00", "销售方名称", "甲餐饮有限公司"]),
+        ],
+    )
+
+    assert rows[0]["是否有发票"] == "无"
+    assert rows[0]["核对状态"] == "需人工核对"
+    assert rows[1]["是否有发票"] == "仅发票（无支付记录）"
+
+
 def test_clean_columns_splits_chinese_enumeration_commas():
     assert clean_columns(["付款金额、付款时间、商家名称、备注"]) == ["付款金额", "付款时间", "商家名称", "备注"]
 
@@ -320,11 +347,41 @@ def test_reimbursement_export_keeps_unmatched_invoice_as_standalone_reimbursemen
     )
     workbook = load_workbook(BytesIO(content), data_only=False)
 
-    assert workbook.sheetnames == ["支付明细", "发票单独报销"]
+    assert workbook.sheetnames == ["支付明细"]
     assert list(workbook["支付明细"].values)[2][:7] == (1, None, None, None, 2400.0, "其他", "仅发票")
-    assert list(workbook["发票单独报销"].values)[2][:6] == (1, None, None, "发票单独报销", 2400.0, "26424000000104330311")
     assert len(workbook["支付明细"]._images) == 1
-    assert len(workbook["发票单独报销"]._images) == 1
+
+
+def test_payment_export_includes_classification_audit_columns():
+    content = create_reimbursement_workbook(
+        [{
+            "源文件": "payment.jpg", "付款金额": "88.00", "商家名称": "本地餐厅",
+            "费用用途": "餐票", "分类置信度": "中", "分类依据": "商户类型：餐厅",
+            "核对状态": "", "是否有发票": "无",
+        }],
+        {},
+        {},
+    )
+    workbook = load_workbook(BytesIO(content), data_only=False)
+    headers = [cell.value for cell in workbook["支付明细"][2]]
+
+    assert headers[7:11] == ["分类置信度", "分类依据", "核对状态", "付款截图"]
+
+
+def test_text_pdf_reads_every_page_including_invoice_text():
+    import pymupdf
+    from backend.app.services.receipt_extractor import LocalReceiptExtractor
+
+    document = pymupdf.open()
+    first = document.new_page(); first.insert_text((72, 72), "Invoice 12345678")
+    second = document.new_page(); second.insert_text((72, 72), "Total 88.00")
+    payload = document.tobytes(); document.close()
+    extractor = LocalReceiptExtractor.__new__(LocalReceiptExtractor)
+
+    lines = extractor.read(payload)
+
+    assert any("Invoice" in line for line in lines)
+    assert any("Total" in line for line in lines)
 
 
 def test_invoice_only_payment_summary_uses_classified_expense_not_raw_tax_item():
@@ -374,3 +431,21 @@ def test_manual_entry_dates_are_appended_to_workbook_and_download_title():
 
     assert workbook["支付明细"]["A1"].value == "张三费用报销单（2026.09.02-2026.09.05）"
     assert reimbursement_workbook_title([], "张三费用报销单", manual_entries) == "张三费用报销单（2026.09.02-2026.09.05）"
+
+
+def test_manual_draft_parses_compact_amount_expressions_exactly():
+    entries, errors = parse_manual_draft("出差餐补320\n车票8+8.43+105+10")
+
+    assert errors == []
+    assert [(entry["用途"], entry["金额"], entry["类型"]) for entry in entries] == [
+        ("出差餐补", "320.00", "无票无支付记录"),
+        ("车票", "131.43", "无票无支付记录"),
+    ]
+    assert entries[1]["备注"] == "8+8.43+105+10=131.43"
+
+
+def test_manual_draft_rejects_uncertain_lines_instead_of_guessing():
+    entries, errors = parse_manual_draft("车票金额待定")
+
+    assert entries == []
+    assert errors == ["第 1 行无法确认用途或金额：车票金额待定"]

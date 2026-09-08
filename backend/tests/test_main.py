@@ -88,3 +88,43 @@ def test_legacy_history_rows_gain_current_classification():
     assert saved["rows"][0]["费用用途"] == "其他"
     assert saved["rows"][0]["分类置信度"] == "中"
     assert "分类依据" in saved["columns"]
+
+
+def test_manual_text_parser_is_available_through_authenticated_api(tmp_path, monkeypatch):
+    monkeypatch.setenv("RECEIPT_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("RECEIPT_ACCESS_TOKEN", "secret")
+    with TestClient(main.app) as client:
+        response = client.post(
+            "/api/manual/parse",
+            headers={"X-Receipt-Token": "secret"},
+            json={"manual_draft": "出差餐补320\n车票8+8.43+105+10"},
+        )
+
+    assert response.status_code == 200
+    assert [entry["金额"] for entry in response.json()["manual_entries"]] == ["320.00", "131.43"]
+
+
+def test_ocr_identity_deduplication_is_independent_of_selected_columns(tmp_path, monkeypatch):
+    monkeypatch.setenv("RECEIPT_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("RECEIPT_ACCESS_TOKEN", "secret")
+    monkeypatch.setattr(main, "get_extractor", lambda: FakeExtractor())
+    main.jobs.clear()
+    headers = {"X-Receipt-Token": "secret"}
+
+    with TestClient(main.app) as client:
+        started = client.post(
+            "/api/process",
+            headers=headers,
+            data={"columns": '["付款金额"]', "worker_count": "2"},
+            files=[
+                ("files", ("one.jpg", b"first-render", "image/jpeg")),
+                ("files", ("same-transaction.jpg", b"second-render", "image/jpeg")),
+            ],
+        )
+        status = _wait(client, started.json()["job_id"], headers)
+        history = client.get("/api/history", headers=headers)
+
+    assert started.json()["duplicate_count"] == 0
+    assert len(status.json()["rows"]) == 1
+    assert status.json()["duplicate_count"] == 1
+    assert history.json()[0]["duplicate_count"] == 1

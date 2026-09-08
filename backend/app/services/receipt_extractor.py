@@ -46,6 +46,37 @@ def clean_columns(raw_columns: Sequence[str]) -> list[str]:
     return columns
 
 
+def parse_manual_draft(text: str) -> tuple[list[dict[str, str]], list[str]]:
+    """Parse one compact manual reimbursement per line without guessing."""
+    from decimal import Decimal, InvalidOperation
+
+    entries: list[dict[str, str]] = []
+    errors: list[str] = []
+    pattern = re.compile(r"^(?P<purpose>.*?[^\d\s+])\s*(?P<amounts>\d+(?:\.\d{1,2})?(?:\s*\+\s*\d+(?:\.\d{1,2})?)*)$")
+    for index, raw_line in enumerate(text.splitlines(), start=1):
+        line = raw_line.strip()
+        if not line:
+            continue
+        matched = pattern.fullmatch(line)
+        if not matched:
+            errors.append(f"第 {index} 行无法确认用途或金额：{line}")
+            continue
+        purpose = matched.group("purpose").rstrip("：:，, ")
+        amount_expression = re.sub(r"\s+", "", matched.group("amounts"))
+        try:
+            total = sum((Decimal(value) for value in amount_expression.split("+")), Decimal("0"))
+        except InvalidOperation:
+            errors.append(f"第 {index} 行无法确认用途或金额：{line}")
+            continue
+        formatted = f"{total.quantize(Decimal('0.01')):.2f}"
+        entries.append({
+            "金额": formatted, "日期": "", "商家": "", "用途": purpose,
+            "备注": f"{amount_expression}={formatted}" if "+" in amount_expression else "",
+            "类型": "无票无支付记录",
+        })
+    return entries, errors
+
+
 def _next_value(lines: OCRLines, labels: set[str]) -> str:
     normalized_labels = {normalize_column_name(label) for label in labels}
     for index, line in enumerate(lines[:-1]):
@@ -160,7 +191,7 @@ def _personal_payment_title(lines: Sequence[str]) -> tuple[str, str]:
 
 def _unlabelled_merchant_title(lines: Sequence[str]) -> str:
     """Some wallet receipts put the merchant only in the large page title."""
-    ignored = ("账单", "支付成功", "收单机构", "支付方式", "支付时间", "付款时间", "转账时间", "交易单号", "经营单号", "当前状态", "账单服务", "收款方")
+    ignored = ("账单", "支付成功", "付款金额", "支付金额", "交易金额", "金额", "收单机构", "支付方式", "支付时间", "付款时间", "转账时间", "交易单号", "经营单号", "当前状态", "账单服务", "收款方")
     for line in lines[:8]:
         compact = re.sub(r"\s+", "", line)
         if any(label in compact for label in ignored) or re.search(r"[-−]?\d[\d,]*\.\d{2}", compact):
@@ -454,6 +485,39 @@ def enrich_expense_classifications(
     return result_columns, enriched_rows
 
 
+def _mark_for_review(row: dict[str, str], reason: str) -> None:
+    """Accumulate review reasons without hiding an earlier extraction warning."""
+    row["核对状态"] = "需人工核对"
+    previous = str(row.get("_review_reason", "")).strip()
+    if reason and reason not in previous:
+        row["_review_reason"] = "；".join(value for value in (previous, reason) if value)
+
+
+def deduplicate_rows(rows: Sequence[dict[str, str]]) -> tuple[list[dict[str, str]], int]:
+    """Deduplicate transactions by stable OCR identity, independent of display columns."""
+    unique: list[dict[str, str]] = []
+    seen: set[tuple[str, ...]] = set()
+    duplicates = 0
+    for row in rows:
+        transaction = str(row.get("_transaction_number") or row.get("交易单号") or row.get("订单号") or "").strip()
+        invoice_number = str(row.get("_invoice_number") or row.get("发票号码") or "").strip()
+        if transaction:
+            key = ("payment-id", re.sub(r"\s+", "", transaction))
+        elif row.get("_invoice_only") and invoice_number:
+            key = ("invoice-id", re.sub(r"\s+", "", invoice_number))
+        else:
+            amount = str(row.get("_payment_amount") or row.get("_invoice_amount") or row.get("付款金额") or row.get("金额") or "").replace(",", "").strip()
+            date = str(row.get("_payment_time") or row.get("_invoice_date") or row.get("付款时间") or row.get("日期") or "").strip()
+            merchant = re.sub(r"\s+", "", str(row.get("_payment_merchant") or row.get("_invoice_merchant") or row.get("商家名称") or row.get("收款方") or "")).lower()
+            key = ("evidence", amount, date, merchant) if amount and (date or merchant) else ("source", str(row.get("源文件", "")))
+        if key in seen:
+            duplicates += 1
+            continue
+        seen.add(key)
+        unique.append(row)
+    return unique, duplicates
+
+
 def _date_text(value: str) -> tuple[int, int, int] | None:
     matched = re.search(r"(20\d{2})[-./年]\s*(\d{1,2})[-./月]\s*(\d{1,2})", value)
     if not matched:
@@ -559,6 +623,10 @@ def build_payment_rows(columns: Sequence[str], documents: Sequence[tuple[str, OC
             continue
         payment_fields = extract_known_fields(lines)
         row = build_row(result_columns, lines, source_name)
+        row["_payment_amount"] = payment_fields.get("payment_amount", "")
+        row["_payment_time"] = payment_fields.get("payment_time", "")
+        row["_payment_merchant"] = payment_fields.get("merchant_name", "")
+        row["_transaction_number"] = payment_fields.get("transaction_number", "")
         if _is_train_ticket(lines):
             row["是否有发票"] = "有票"
             row["_invoice_source"] = source_name
@@ -609,7 +677,7 @@ def build_payment_rows(columns: Sequence[str], documents: Sequence[tuple[str, OC
                 if merchant_ok and '住宿' in invoice.get('invoice_item', ''):
                     return 0 <= (datetime(*invoice_date)-datetime(*payment_date)).days <= 7
                 return date_ok and merchant_ok
-            return date_ok or merchant_ok
+            return date_known and merchant_known and date_ok and merchant_ok
         matched = next((invoice for invoice in invoices if is_match(invoice)), None)
         if matched:
             for column in result_columns:
@@ -641,8 +709,18 @@ def build_payment_rows(columns: Sequence[str], documents: Sequence[tuple[str, OC
             ):
                 if "核对状态" not in result_columns:
                     result_columns.append("核对状态")
-                row["核对状态"] = "需人工核对"
-                row["_review_reason"] = "存在同金额发票，但日期或商家无法确认"
+                _mark_for_review(row, "存在同金额发票，但日期或商家无法确认")
+        missing = []
+        if not payment_amount:
+            missing.append("付款金额")
+        if not payment_fields.get("payment_time"):
+            missing.append("付款时间")
+        if not payment_fields.get("merchant_name"):
+            missing.append("商家名称")
+        if missing:
+            if "核对状态" not in result_columns:
+                result_columns.append("核对状态")
+            _mark_for_review(row, f"未可靠识别：{'、'.join(missing)}")
         rows.append(row)
 
     # Optional standalone reimbursement: an invoice with no trustworthy
@@ -774,7 +852,6 @@ def create_reimbursement_workbook(rows: Sequence[dict[str, str]], payment_images
         "_manual": "1",
     } for item in (manual_entries or []) if str(item.get("金额", "")).strip()]
     payment_rows = extracted_rows + manual_rows
-    standalone_rows = [row for row in extracted_rows if row.get("_invoice_only")]
     workbook = load_workbook(template_path)
     source_sheet = workbook["支付明细"]
     payment_sheet = workbook.create_sheet("支付明细", 0)
@@ -783,9 +860,12 @@ def create_reimbursement_workbook(rows: Sequence[dict[str, str]], payment_images
     for letter in "ABCDEFGH":
         payment_sheet.column_dimensions[letter].width = source_sheet.column_dimensions[letter].width
     payment_sheet.column_dimensions["H"].width = 12
-    for column in range(1, 9):
+    payment_sheet.column_dimensions["I"].width = 38
+    payment_sheet.column_dimensions["J"].width = 26
+    payment_sheet.column_dimensions["K"].width = 18
+    for column in range(1, 12):
         for row_number in (1, 2):
-            source = source_sheet.cell(row_number, column)
+            source = source_sheet.cell(row_number, min(column, 8))
             target = payment_sheet.cell(row_number, column, source.value)
             target._style = copy(source._style)
             target.number_format = source.number_format
@@ -793,7 +873,7 @@ def create_reimbursement_workbook(rows: Sequence[dict[str, str]], payment_images
             target.font = copy(source.font)
             target.fill = copy(source.fill)
             target.border = copy(source.border)
-    payment_sheet.merge_cells("A1:H1")
+    payment_sheet.merge_cells("A1:K1")
     payment_sheet.row_dimensions[1].height = max(36, source_sheet.row_dimensions[1].height or 36)
     payment_sheet.row_dimensions[2].height = max(28, source_sheet.row_dimensions[2].height or 28)
     prefix = str(source_sheet["A1"].value or "刘生费用报销单").split("（", 1)[0].split("(", 1)[0]
@@ -802,6 +882,8 @@ def create_reimbursement_workbook(rows: Sequence[dict[str, str]], payment_images
     if custom_title and period and period not in custom_title:
         custom_title = f'{custom_title}（{period}）'
     payment_sheet["A1"] = custom_title or (f"{prefix}（{period}）" if period else prefix)
+    for column, header in enumerate(("序号", "日期", "时间", "收款账户", "金额", "费用用途", "是否有发票", "分类置信度", "分类依据", "核对状态", "付款截图"), start=1):
+        payment_sheet.cell(2, column, header)
 
     for index, row in enumerate(payment_rows, start=3):
         invoice_only = bool(row.get("_invoice_only"))
@@ -816,16 +898,22 @@ def create_reimbursement_workbook(rows: Sequence[dict[str, str]], payment_images
         merchant = row.get("商家名称") or row.get("收款方") or (row.get("_invoice_merchant") if invoice_only else "") or ""
         classified_expense = str(row.get("_expense_category", "")) or classify_expense(row)
         expense = str(row.get("商品名称", "")) or str(row.get("备注", "")) if row.get("_manual") else classified_expense
-        values = [index - 2, date_value, time_value, merchant, amount, expense, "无票无支付记录" if row.get("_manual") else ("仅发票" if invoice_only else ("有票" if invoice_status.startswith("有") else "无票"))]
+        invoice_label = "无票无支付记录" if row.get("_manual") else ("仅发票" if invoice_only else ("有票" if invoice_status.startswith("有") else "无票"))
+        values = [
+            index - 2, date_value, time_value, merchant, amount, expense, invoice_label,
+            "人工" if row.get("_manual") else row.get("分类置信度", ""),
+            "手工补录" if row.get("_manual") else row.get("分类依据", ""),
+            row.get("_review_reason", "") or row.get("核对状态", ""),
+        ]
         for column, value in enumerate(values, start=1):
-            source = source_sheet.cell(3, column)
+            source = source_sheet.cell(3, min(column, 8))
             target = payment_sheet.cell(index, column, _excel_safe(value))
             target._style = copy(source._style)
             target.alignment = copy(source.alignment)
             target.border = copy(source.border)
         payment_sheet.cell(index, 5).number_format = "0.00"
         edge = Side(style="thin", color="B7B7B7")
-        for column in (7, 8):
+        for column in range(7, 12):
             payment_sheet.cell(index, column).border = Border(left=edge, right=edge, top=edge, bottom=edge)
         image_bytes = (
             _lookup_image(invoice_images, row.get("源文件", ""))
@@ -834,13 +922,13 @@ def create_reimbursement_workbook(rows: Sequence[dict[str, str]], payment_images
         )
         if not image_bytes:
             image_bytes = _lookup_image(payment_images if invoice_only else invoice_images, row.get("源文件", ""))
-        _add_compact_image(payment_sheet, f"H{index}", image_bytes, 84, 150)
+        _add_compact_image(payment_sheet, f"K{index}", image_bytes, 125, 150)
         payment_sheet.row_dimensions[index].height = 112
         payment_sheet.cell(index, 7).fill = PatternFill("solid", fgColor="E2F0D9" if values[6] == "有票" else ("FFF2CC" if values[6] == "仅发票" else "FCE4D6"))
 
     total_row = len(payment_rows) + 3
-    for column in range(1, 9):
-        source = source_sheet.cell(193, column)
+    for column in range(1, 12):
+        source = source_sheet.cell(193, min(column, 8))
         target = payment_sheet.cell(total_row, column)
         target._style = copy(source._style)
         target.alignment = copy(source.alignment)
@@ -850,9 +938,9 @@ def create_reimbursement_workbook(rows: Sequence[dict[str, str]], payment_images
     payment_sheet.cell(total_row, 5).number_format = "0.00"
     payment_sheet.row_dimensions[total_row].height = max(28, source_sheet.row_dimensions[193].height or 28)
     edge = Side(style="thin", color="B7B7B7")
-    for column in range(1, 9):
+    for column in range(1, 12):
         payment_sheet.cell(total_row, column).border = Border(left=edge, right=edge, top=edge, bottom=edge)
-    payment_sheet.auto_filter.ref = f"A2:H{total_row - 1}" if payment_rows else "A2:H2"
+    payment_sheet.auto_filter.ref = f"A2:K{total_row - 1}" if payment_rows else "A2:K2"
     # Add the compact reimbursement summary shown below the total row.
     # Invoice-only rows are included in the reimbursement total and counted
     # as 有票, while rows explicitly marked 无票 form the no-invoice total.
@@ -862,13 +950,13 @@ def create_reimbursement_workbook(rows: Sequence[dict[str, str]], payment_images
     note_detail_row = total_row + 4
     for row_number in (note_row, summary_header_row, summary_value_row, note_detail_row):
         payment_sheet.row_dimensions[row_number].height = 24
-        for column in range(1, 9):
-            source = source_sheet.cell(3 if row_number != summary_header_row else 2, column)
+        for column in range(1, 12):
+            source = source_sheet.cell(3 if row_number != summary_header_row else 2, min(column, 8))
             target = payment_sheet.cell(row_number, column)
             target._style = copy(source._style)
             target.alignment = copy(source.alignment)
             target.border = Border(left=edge, right=edge, top=edge, bottom=edge)
-    payment_sheet.merge_cells(start_row=note_row, start_column=1, end_row=note_row, end_column=8)
+    payment_sheet.merge_cells(start_row=note_row, start_column=1, end_row=note_row, end_column=11)
     payment_sheet.cell(note_row, 1, "备注：")
     payment_sheet.cell(summary_header_row, 1, "1")
     payment_sheet.cell(summary_header_row, 2, "报销金额合计")
@@ -881,7 +969,7 @@ def create_reimbursement_workbook(rows: Sequence[dict[str, str]], payment_images
         payment_sheet.cell(summary_value_row, column).number_format = "0.00"
     payment_sheet.cell(note_detail_row, 1, "2")
     payment_sheet.cell(note_detail_row, 2, "")
-    payment_sheet.print_area = f"A1:H{note_detail_row}"
+    payment_sheet.print_area = f"A1:K{note_detail_row}"
 
     # Remove the completed-example tabs and build a clean invoice tab containing only matched invoices.
     for sheet in list(workbook.worksheets):
@@ -941,34 +1029,6 @@ def create_reimbursement_workbook(rows: Sequence[dict[str, str]], payment_images
         invoice_index += 1
     if invoice_index == 3:
         workbook.remove(invoice_sheet)
-    if standalone_rows:
-        standalone = workbook.create_sheet("发票单独报销")
-        standalone.sheet_view.showGridLines = False
-        standalone.merge_cells("A1:G1")
-        standalone["A1"] = payment_sheet["A1"].value
-        standalone["A1"]._style = copy(payment_sheet["A1"]._style)
-        standalone.append(["序号", "开票日期", "销售方", "费用用途", "报销金额", "发票号码", "发票图片"])
-        for cell in standalone[2]:
-            cell.font = Font(bold=True); cell.fill = PatternFill("solid", fgColor="FCE4D6")
-            cell.border = Border(left=table_edge, right=table_edge, top=table_edge, bottom=table_edge)
-            cell.alignment = copy(payment_sheet["A2"].alignment)
-        for letter, width in {"A": 8, "B": 14, "C": 30, "D": 24, "E": 14, "F": 22, "G": 22}.items():
-            standalone.column_dimensions[letter].width = width
-        for index, row in enumerate(standalone_rows, start=3):
-            standalone.append([_excel_safe(value) for value in [index - 2, row.get("_invoice_date", ""), row.get("_invoice_merchant", ""), row.get("_invoice_item", "") or "发票单独报销", float(row.get("_invoice_amount", "0") or 0), row.get("_invoice_number", "")]])
-            image_bytes = _lookup_image(invoice_images, row.get("源文件", "")) or _lookup_image(payment_images, row.get("源文件", ""))
-            _add_compact_image(standalone, f"G{index}", image_bytes, 150, 125)
-            for cell in standalone[index]:
-                cell.border = Border(left=table_edge, right=table_edge, top=table_edge, bottom=table_edge)
-                cell.alignment = copy(payment_sheet["A3"].alignment)
-            standalone.cell(index, 5).number_format = "0.00"
-            standalone.row_dimensions[index].height = 94
-        total = len(standalone_rows) + 3
-        standalone.cell(total, 1, "合计")
-        standalone.cell(total, 5, f"=SUM(E3:E{total - 1})")
-        standalone.cell(total, 5).number_format = "0.00"
-        for cell in standalone[total]:
-            cell.border = Border(left=table_edge, right=table_edge, top=table_edge, bottom=table_edge)
     for sheet in workbook.worksheets:
         for row in sheet.iter_rows():
             for cell in row:
@@ -1057,16 +1117,19 @@ class LocalReceiptExtractor:
 
             reader = PdfReader(BytesIO(image_bytes))
             text_lines = [line.strip() for page in reader.pages for line in (page.extract_text() or "").splitlines() if line.strip()]
-            if text_lines and not is_invoice(text_lines):
+            if text_lines:
                 return text_lines
-            # Scanned/image-only PDFs have no text layer; render the first page
-            # and send it through the same local OCR pipeline as screenshots.
+            # Scanned/image-only PDFs have no text layer. Render every page and
+            # combine their local OCR output so a multi-page invoice is complete.
             try:
                 import pymupdf
                 document = pymupdf.open(stream=image_bytes, filetype="pdf")
-                if document.page_count:
-                    image_bytes = document[0].get_pixmap(matrix=pymupdf.Matrix(1.8, 1.8), alpha=False).tobytes("png")
+                page_images = [
+                    page.get_pixmap(matrix=pymupdf.Matrix(1.8, 1.8), alpha=False).tobytes("png")
+                    for page in document
+                ]
                 document.close()
+                return [line for page_image in page_images for line in self.read(page_image)]
             except Exception:
                 return []
         try:

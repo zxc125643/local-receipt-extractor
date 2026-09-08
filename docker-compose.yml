@@ -1,0 +1,21 @@
+services:
+  receipt-extractor:
+    build: .
+    container_name: local-receipt-extractor
+    restart: unless-stopped
+    ports:
+      - "${HOST_PORT:-8766}:8765"
+    environment:
+      RECEIPT_DATA_DIR: /data
+      RECEIPT_OCR_ENGINE: paddle
+      RECEIPT_ACCESS_TOKEN: "${RECEIPT_ACCESS_TOKEN:?Set RECEIPT_ACCESS_TOKEN in .env}"
+      RECEIPT_OCR_THREADS: "${RECEIPT_OCR_THREADS:-2}"
+      RECEIPT_OCR_WORKERS: "${RECEIPT_OCR_WORKERS:-2}"
+      PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK: "True"
+    volumes:
+      - receipt-data:/data
+      - receipt-models:/root/.paddlex
+
+volumes:
+  receipt-data:
+  receipt-models:
