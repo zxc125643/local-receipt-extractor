@@ -221,6 +221,21 @@ async def rename_receipt_history(job_id: str, payload: dict[str, object]) -> dic
             raise HTTPException(status_code=404, detail='找不到该历史批次。')
     return {'job_id': job_id, 'title': title}
 
+@router.put("/history/{job_id}/manual")
+async def save_manual_entries(job_id: str, payload: dict[str, object]) -> dict[str, object]:
+    entries = payload.get('manual_entries', [])
+    draft = payload.get('manual_draft', '')
+    if not isinstance(entries, list) or not all(isinstance(x, dict) for x in entries) or not isinstance(draft, str):
+        raise HTTPException(status_code=422, detail='补录格式无效。')
+    with sqlite3.connect(_history_db()) as db:
+        saved = db.execute('SELECT rows_json FROM receipt_batches WHERE id=?', (job_id,)).fetchone()
+        if not saved:
+            raise HTTPException(status_code=404, detail='找不到该历史批次。')
+        data = json.loads(saved[0])
+        data.update(manual_entries=entries, manual_draft=draft)
+        db.execute('UPDATE receipt_batches SET rows_json=? WHERE id=?', (json.dumps(data, ensure_ascii=False), job_id))
+    return {'job_id': job_id}
+
 @router.delete("/history/{job_id}")
 async def delete_receipt_history(job_id: str) -> dict[str, bool]:
     with sqlite3.connect(_history_db()) as db:

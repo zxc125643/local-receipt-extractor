@@ -226,7 +226,13 @@ export function deleteProxy(id: number) {
 
 type ReceiptProgress = { completed: number; total: number; currentFile: string; status: string };
 type ReceiptResult = { job_id: string; columns: string[]; rows: Array<Record<string, string>> };
-export type ReceiptHistory = { job_id: string; created_at: string; title: string; total: number; columns: string[]; rows: Array<Record<string, string>> };
+export type ReceiptHistory = { job_id: string; created_at: string; title: string; total: number; columns: string[]; rows: Array<Record<string, string>>; manual_entries?: Array<Record<string, string>>; manual_draft?: string };
+
+export async function saveReceiptManual(jobId: string, entries: Array<Record<string, string>>, draft: string) {
+  const runtime = await getRuntimeConfig();
+  const response = await fetch(`${runtime.apiBaseUrl}/receipts/history/${jobId}/manual`, { method: 'PUT', headers: { 'Content-Type': 'application/json', 'X-Desktop-Token': runtime.apiToken }, body: JSON.stringify({ manual_entries: entries, manual_draft: draft }) });
+  if (!response.ok) throw new Error('补录保存失败，请重试');
+}
 
 export async function getReceiptHistory() {
   const runtime = await getRuntimeConfig();
