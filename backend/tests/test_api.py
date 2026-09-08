@@ -70,7 +70,9 @@ def test_receipt_endpoints_extract_requested_columns_and_export_xlsx(tmp_path: P
         def read(self, _image: bytes):
             return ["-405.00", "支付时间", "2026年8月23日 19:36:37", "商户全称", "本地餐厅"]
 
+    monkeypatch.setenv("CORE_GATEWAY_DATA_DIR", str(tmp_path / "receipt-data"))
     monkeypatch.setattr(receipts, "get_extractor", lambda: FakeExtractor())
+    receipts.jobs.clear()
     app = create_app(settings=make_settings(tmp_path), enable_sync=False)
     with TestClient(app) as client:
         headers = {"X-Desktop-Token": "test-token"}
@@ -94,6 +96,7 @@ def test_receipt_endpoints_extract_requested_columns_and_export_xlsx(tmp_path: P
     assert status.json()["rows"] == [{"源文件": "receipt.jpg", "付款金额": "405.00", "付款时间": "2026-08-23 19:36:37", "商家名称": "本地餐厅", "是否有发票": "无"}]
     assert exported.status_code == 200
     assert exported.headers["content-type"].startswith("application/vnd.openxmlformats-officedocument")
+    receipts.jobs.clear()
 
 
 def test_receipt_export_uses_manual_entries_saved_with_history(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
