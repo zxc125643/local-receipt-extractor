@@ -80,7 +80,14 @@ export function ReceiptExtractorPage() {
       setResultExpanded(true);
       setManualSaveState('');
       updateResult(data);
-      void getReceiptHistory().then(setHistory).catch(() => undefined);
+      void getReceiptHistory().then((items) => setHistory((currentItems) => {
+        const optimistic = currentItems.find((item) => item.job_id === data.job_id);
+        return items.map((item) => item.job_id === data.job_id ? {
+          ...item,
+          manual_entries: optimistic?.manual_entries || manualEntries,
+          manual_draft: optimistic?.manual_draft ?? manualText,
+        } : item);
+      })).catch(() => undefined);
       const reviewCount = data.rows.filter((row) => row["核对状态"] === "需人工核对").length;
       setNotice({ tone: reviewCount ? "info" : (data.duplicate_count ? "info" : "success"), text: `已在本机识别 ${data.rows.length} 张图片。${data.duplicate_count ? `发现重复图片 ${data.duplicate_count} 张，已跳过重复计算。` : "未发现重复图片。"}${reviewCount ? `有 ${reviewCount} 条需要人工核对。` : ""} 请核对后导出 Excel。` });
       if (reviewCount) window.alert(`人工核对\n\n发现 ${reviewCount} 条记录存在关键字段无法确认，系统已留空，不能直接作为最终报销数据。请人工核对后再导出。`);

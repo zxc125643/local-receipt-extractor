@@ -14,7 +14,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import Response
 
 from backend.app.api.deps import assert_desktop_auth
-from backend.app.services.receipt_extractor import LocalReceiptExtractor, build_payment_rows, clean_columns, create_reimbursement_workbook, extract_invoice_fields, is_invoice, reimbursement_workbook_title
+from backend.app.services.receipt_extractor import LocalReceiptExtractor, build_invoice_record, build_payment_rows, clean_columns, create_reimbursement_workbook, is_invoice, reimbursement_workbook_title
 
 router = APIRouter(prefix="/receipts", tags=["receipts"], dependencies=[Depends(assert_desktop_auth)])
 ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp", "application/pdf"}
@@ -150,7 +150,7 @@ def run_receipt_job_sync(job: ReceiptJob, requested_columns: list[str]) -> None:
     read_many = getattr(extractor, "read_many", None)
     ocr_results = read_many(contents, on_progress, worker_count=job.worker_count) if read_many else [extractor.read(content) for content in contents]
     documents = [(name, lines) for (name, _), lines in zip(job.files, ocr_results, strict=True)]
-    job.invoices = [{**extract_invoice_fields(lines), "_source": name} for name, lines in documents if is_invoice(lines)]
+    job.invoices = [build_invoice_record(name, lines) for name, lines in documents if is_invoice(lines)]
     job.columns, job.rows = build_payment_rows(requested_columns, documents)
     # OCR can produce duplicate rows when the same screenshot was recompressed
     # or renamed.  Deduplicate on extracted payment fields, not raw file bytes.
@@ -252,31 +252,33 @@ async def export_receipts(payload: dict[str, object]) -> Response:
     job_id = payload.get("job_id")
     if not isinstance(job_id, str):
         raise HTTPException(status_code=422, detail="批次编号无效。")
+    with sqlite3.connect(_history_db()) as db:
+        saved = db.execute('SELECT rows_json, title FROM receipt_batches WHERE id=?', (job_id,)).fetchone()
+    saved_data = _dedupe_saved(json.loads(saved[0])) if saved else None
     job = jobs.get(job_id)
     if job is None:
-        with sqlite3.connect(_history_db()) as db:
-            saved = db.execute('SELECT rows_json, title FROM receipt_batches WHERE id=?', (job_id,)).fetchone()
-        if not saved:
+        if saved_data is None or saved is None:
             raise HTTPException(status_code=422, detail="找不到该历史批次。")
-        data = _dedupe_saved(json.loads(saved[0]))
         files = []
         image_dir = _history_dir(job_id)
-        for name in data.get('files', []):
+        for name in saved_data.get('files', []):
             safe_name = hashlib.sha256(name.encode('utf-8')).hexdigest() + Path(name).suffix.lower()
             image_path = image_dir / safe_name
             if image_path.exists():
                 files.append((name, image_path.read_bytes()))
-        job = ReceiptJob(total=len(files), files=files, id=job_id, status='completed', columns=data.get('columns', []), rows=data.get('rows', []), invoices=data.get('invoices', []), payment_images=dict(files), invoice_images=dict(files), title=str(saved[1] or ''))
+        job = ReceiptJob(total=len(files), files=files, id=job_id, status='completed', columns=saved_data.get('columns', []), rows=saved_data.get('rows', []), invoices=saved_data.get('invoices', []), payment_images=dict(files), invoice_images=dict(files), title=str(saved[1] or ''))
     if job.status != "completed":
         raise HTTPException(status_code=422, detail="图片仍在识别中，请等待处理完成。")
     requested_title = str(payload.get('title', '')).strip()[:120] or job.title
-    manual_entries = payload.get('manual_entries', [])
-    if not isinstance(manual_entries, list):
+    manual_entries = payload.get('manual_entries')
+    if manual_entries is None:
+        manual_entries = saved_data.get('manual_entries', []) if saved_data else []
+    if not isinstance(manual_entries, list) or not all(isinstance(item, dict) for item in manual_entries):
         raise HTTPException(status_code=422, detail="手工补录格式无效。")
     content = create_reimbursement_workbook(job.rows, job.payment_images, job.invoice_images, job.invoices, requested_title, manual_entries)
     import re
     from urllib.parse import quote
-    title = re.sub(r'[\\/:*?"<>|\r\n]+', "_", reimbursement_workbook_title(job.rows, requested_title)).strip(" .") or "费用报销单"
+    title = re.sub(r'[\\/:*?"<>|\r\n]+', "_", reimbursement_workbook_title(job.rows, requested_title, manual_entries)).strip(" .") or "费用报销单"
     return Response(
         content=content,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

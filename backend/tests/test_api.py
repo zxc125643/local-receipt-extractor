@@ -3,10 +3,12 @@ from __future__ import annotations
 import asyncio
 import time
 from datetime import datetime, timedelta
+from io import BytesIO
 from pathlib import Path
 
 from fastapi.testclient import TestClient
 from imapclient import exceptions as imap_exceptions
+from openpyxl import load_workbook
 import pytest
 from sqlalchemy import select
 
@@ -92,6 +94,86 @@ def test_receipt_endpoints_extract_requested_columns_and_export_xlsx(tmp_path: P
     assert status.json()["rows"] == [{"源文件": "receipt.jpg", "付款金额": "405.00", "付款时间": "2026-08-23 19:36:37", "商家名称": "本地餐厅", "是否有发票": "无"}]
     assert exported.status_code == 200
     assert exported.headers["content-type"].startswith("application/vnd.openxmlformats-officedocument")
+
+
+def test_receipt_export_uses_manual_entries_saved_with_history(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    class FakeExtractor:
+        def read(self, _image: bytes):
+            return ["-34.00", "支付时间", "2026年9月1日 12:00:00", "商户全称", "测试商店"]
+
+    monkeypatch.setenv("CORE_GATEWAY_DATA_DIR", str(tmp_path / "receipt-data"))
+    monkeypatch.setattr(receipts, "get_extractor", lambda: FakeExtractor())
+    receipts.jobs.clear()
+    app = create_app(settings=make_settings(tmp_path), enable_sync=False)
+    with TestClient(app) as client:
+        headers = {"X-Desktop-Token": "test-token"}
+        started = client.post(
+            "/receipts/process",
+            headers=headers,
+            data={"columns": '["付款金额", "付款时间", "商家名称"]'},
+            files=[("files", ("receipt.jpg", b"history-image", "image/jpeg"))],
+        )
+        job_id = started.json()["job_id"]
+        for _ in range(50):
+            status = client.get(f"/receipts/status/{job_id}", headers=headers)
+            if status.json()["status"] == "completed":
+                break
+            time.sleep(0.01)
+        saved = client.put(
+            f"/receipts/history/{job_id}/manual",
+            headers=headers,
+            json={"manual_entries": [{"金额": "320", "日期": "2026-09-03", "商家": "", "用途": "出差餐补", "备注": ""}], "manual_draft": ""},
+        )
+        receipts.jobs.clear()
+        exported = client.post("/receipts/export", headers=headers, json={"job_id": job_id})
+
+    workbook = load_workbook(BytesIO(exported.content), data_only=False)
+    payment_values = list(workbook["支付明细"].values)
+    assert saved.status_code == 200
+    assert exported.status_code == 200
+    assert payment_values[3][:7] == (2, "2026-09-03", None, None, 320.0, "出差餐补", "无票无支付记录")
+    assert payment_values[0][0].endswith("（2026.09.01-2026.09.03）")
+    assert "2026.09.01-2026.09.03" in exported.headers["content-disposition"]
+    receipts.jobs.clear()
+
+
+def test_receipt_manual_entries_are_isolated_per_history_batch(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    class FakeExtractor:
+        def read(self, _image: bytes):
+            return ["-10.00", "支付时间", "2026年9月1日 12:00:00", "商户全称", "测试商店"]
+
+    monkeypatch.setenv("CORE_GATEWAY_DATA_DIR", str(tmp_path / "receipt-data"))
+    monkeypatch.setattr(receipts, "get_extractor", lambda: FakeExtractor())
+    receipts.jobs.clear()
+    app = create_app(settings=make_settings(tmp_path), enable_sync=False)
+    with TestClient(app) as client:
+        headers = {"X-Desktop-Token": "test-token"}
+        job_ids: list[str] = []
+        for index in range(2):
+            started = client.post(
+                "/receipts/process",
+                headers=headers,
+                data={"columns": '["付款金额"]'},
+                files=[("files", (f"receipt-{index}.jpg", f"image-{index}".encode(), "image/jpeg"))],
+            )
+            job_id = started.json()["job_id"]
+            job_ids.append(job_id)
+            for _ in range(50):
+                status = client.get(f"/receipts/status/{job_id}", headers=headers)
+                if status.json()["status"] == "completed":
+                    break
+                time.sleep(0.01)
+        client.put(
+            f"/receipts/history/{job_ids[0]}/manual",
+            headers=headers,
+            json={"manual_entries": [{"金额": "8", "日期": "", "商家": "", "用途": "车票", "备注": ""}], "manual_draft": ""},
+        )
+        history = client.get("/receipts/history", headers=headers).json()
+
+    by_id = {item["job_id"]: item for item in history}
+    assert by_id[job_ids[0]]["manual_entries"] == [{"金额": "8", "日期": "", "商家": "", "用途": "车票", "备注": ""}]
+    assert by_id[job_ids[1]].get("manual_entries", []) == []
+    receipts.jobs.clear()
 
 
 def test_event_bus_delivers_mail_received_payload(tmp_path: Path):
