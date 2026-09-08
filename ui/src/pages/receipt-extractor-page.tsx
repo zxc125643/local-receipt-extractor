@@ -10,6 +10,21 @@ type ManualEntry = { 金额: string; 日期: string; 商家: string; 用途: str
 function splitColumns(value: string) {
   return value.split(/[，,、\n]/).map((item) => item.trim()).filter(Boolean);
 }
+function parseManualText(value: string): ManualEntry[] {
+  const parsed: ManualEntry[] = [];
+  value.split(/\r?\n/).map((line) => line.trim()).filter(Boolean).forEach((line) => {
+    const compact = line.replace(/×/g, "*");
+    const shorthand = compact.match(/^(.+?)([0-9][0-9+.*\/()\-\s]*)$/);
+    if (shorthand && !compact.includes("，") && !compact.includes(",")) {
+      const expression = shorthand[2].replace(/\s+/g, "");
+      if (/^[0-9+*/().-]+$/.test(expression)) { try { const amount = Number(Function(`"use strict"; return (${expression})`)()); if (Number.isFinite(amount)) parsed.push({ 金额: amount.toFixed(2), 日期: "", 商家: "", 用途: shorthand[1].trim(), 备注: "" }); } catch { /* invalid line */ } }
+      return;
+    }
+    const parts = line.split(/[，,]/).map((item) => item.trim());
+    if (parts[0] && Number.isFinite(Number(parts[0]))) parsed.push({ 金额: parts[0], 日期: parts[1] || "", 商家: parts[2] || "", 用途: parts[3] || "", 备注: parts.slice(4).join(",") });
+  });
+  return parsed;
+}
 
 export function ReceiptExtractorPage() {
   const fileInput = useRef<HTMLInputElement>(null);
@@ -40,6 +55,8 @@ export function ReceiptExtractorPage() {
   });
 
   const columns = splitColumns(columnsText);
+  const pendingManualEntries = parseManualText(manualText);
+  const effectiveManualEntries = [...manualEntries, ...pendingManualEntries];
   const startProcessing = () => {
     saveApiToken(token);
     if (columns.length === 0) {
@@ -101,9 +118,9 @@ export function ReceiptExtractorPage() {
       {result ? <div className="panel receipt-results">
         <div className="panel-header">
           <div><h3>提取预览</h3><p className="muted-text">空白字段表示本地 OCR 未能可靠定位，请直接核对后导出。</p></div>
-          <button className="primary-button" type="button" onClick={() => void downloadReceiptWorkbook({ ...result, title: reportTitle, manual_entries: manualEntries }).catch((error) => setNotice({ tone: "error", text: error instanceof Error ? error.message : "导出失败。" }))}>导出 Excel</button>
+          <button className="primary-button" type="button" onClick={() => void downloadReceiptWorkbook({ ...result, title: reportTitle, manual_entries: effectiveManualEntries }).catch((error) => setNotice({ tone: "error", text: error instanceof Error ? error.message : "导出失败。" }))}>导出 Excel</button>
         </div>
-        {manualEntries.length ? <p className="muted-text">金额组成：识别记录 {result.rows.reduce((s, r) => s + (Number(r["付款金额"]) || 0), 0).toFixed(2)} + 手工补录 {manualEntries.reduce((s, r) => s + (Number(r.金额) || 0), 0).toFixed(2)} = 总计 {(result.rows.reduce((s, r) => s + (Number(r["付款金额"]) || 0), 0) + manualEntries.reduce((s, r) => s + (Number(r.金额) || 0), 0)).toFixed(2)}</p> : null}
+        {effectiveManualEntries.length ? <p className="muted-text">金额组成：识别记录 {result.rows.reduce((s, r) => s + (Number(r["付款金额"]) || 0), 0).toFixed(2)} + 手工补录 {effectiveManualEntries.reduce((s, r) => s + (Number(r.金额) || 0), 0).toFixed(2)} = 总计 {(result.rows.reduce((s, r) => s + (Number(r["付款金额"]) || 0), 0) + effectiveManualEntries.reduce((s, r) => s + (Number(r.金额) || 0), 0)).toFixed(2)}</p> : null}
         <div className="table-shell"><table className="data-table"><thead><tr><th>源文件</th>{result.columns.map((column) => <th key={column}>{column}</th>)}</tr></thead><tbody>{result.rows.map((row, index) => <tr key={`${row["源文件"]}-${index}`}><td>{row["源文件"]}</td>{result.columns.map((column) => <td key={column}>{row[column] || "—"}</td>)}</tr>)}</tbody></table></div>
       </div> : null}
       <div className="panel receipt-manual">

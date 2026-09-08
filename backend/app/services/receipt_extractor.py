@@ -313,7 +313,7 @@ def _date_text(value: str) -> tuple[int, int, int] | None:
 
 def reimbursement_period(rows: Sequence[dict[str, str]]) -> str:
     """Use invoice dates for the title; payment dates are the fallback when no invoice exists."""
-    dates = [date for row in rows for date in [_date_text(row.get("付款时间", ""))] if date]
+    dates = [date for row in rows for date in [_date_text(row.get("付款时间", "") or row.get("日期", ""))] if date]
     if not dates:
         dates = [date for row in rows for date in [_date_text(row.get("发票日期", "") or row.get("_invoice_date", ""))] if date]
     if not dates:
@@ -340,6 +340,7 @@ COLUMN_ALIASES = {
     "支付金额": "payment_amount",
     "交易金额": "payment_amount",
     "金额": "payment_amount",
+    "日期": "payment_time",
     "付款时间": "payment_time",
     "支付时间": "payment_time",
     "交易时间": "payment_time",
@@ -374,10 +375,15 @@ def build_row(columns: Sequence[str], lines: OCRLines, source_name: str) -> dict
     for column in columns:
         key = alias_index.get(normalize_column_name(column))
         row[column] = fields.get(key, "") if key else ""
-    if _is_train_ticket(lines) and (not fields.get("payment_amount") or not fields.get("payment_time") or not fields.get("transaction_number")):
-        row["核对状态"] = "需人工核对"
     if _is_train_ticket(lines):
         row["商品名称"] = "客运车票"
+        for column in ("车次", "班次", "座位号", "出发站", "始发站", "到达站"):
+            value = str(row.get(column, "")).strip()
+            if value and (value in {"国家税务总局", "检票口", "到达站", "始发站"} or re.fullmatch(r"20\d{2}", value)):
+                row[column] = ""
+        if (not fields.get("payment_amount") or not fields.get("payment_time") or not fields.get("transaction_number")
+                or any(column in row and not str(row.get(column, "")).strip() for column in ("车次", "座位号", "出发站", "到达站"))):
+            row["核对状态"] = "需人工核对"
     return row
 
 
@@ -393,7 +399,11 @@ def build_payment_rows(columns: Sequence[str], documents: Sequence[tuple[str, OC
     for name, lines in documents:
         if not is_invoice(lines):
             continue
-        invoice = {**extract_invoice_fields(lines), "_source": name}
+        if _is_train_ticket(lines):
+            ticket = extract_known_fields(lines)
+            invoice = {"invoice_amount": ticket.get("payment_amount", ""), "invoice_date": ticket.get("payment_time", ""), "invoice_number": ticket.get("transaction_number", ""), "invoice_merchant": "湖北省道路客运", "invoice_item": "客运车票", "_source": name}
+        else:
+            invoice = {**extract_invoice_fields(lines), "_source": name}
         metadata = _invoice_filename_metadata(name)
         if metadata.get("invoice_amount") and not invoice.get("invoice_amount"):
             invoice["invoice_amount"] = metadata["invoice_amount"]
@@ -417,6 +427,11 @@ def build_payment_rows(columns: Sequence[str], documents: Sequence[tuple[str, OC
         row = build_row(result_columns, lines, source_name)
         if _is_train_ticket(lines):
             row["是否有发票"] = "有票"
+            row["_invoice_source"] = source_name
+            row["_invoice_date"] = extract_known_fields(lines).get("payment_time", "")
+            matched_invoice_sources.add(source_name)
+            rows.append(row)
+            continue
         payment_amount = row.get("付款金额") or row.get("支付金额") or row.get("交易金额") or row.get("金额") or ""
         payment_date = _date_text(row.get("付款时间", ""))
         # Personal QR receipts may put the real merchant in the remark/product
@@ -606,7 +621,7 @@ def create_reimbursement_workbook(rows: Sequence[dict[str, str]], payment_images
     prefix = str(source_sheet["A1"].value or "刘生费用报销单").split("（", 1)[0].split("(", 1)[0]
     period = reimbursement_period(rows)
     custom_title = title_override.strip()
-    if custom_title and period and not re.search(r'20\d{2}', custom_title):
+    if custom_title and period and period not in custom_title:
         custom_title = f'{custom_title}（{period}）'
     payment_sheet["A1"] = custom_title or (f"{prefix}（{period}）" if period else prefix)
 
@@ -617,7 +632,7 @@ def create_reimbursement_workbook(rows: Sequence[dict[str, str]], payment_images
             amount = float(amount_text.replace(",", ""))
         except ValueError:
             amount = 0
-        date_time = row.get("付款时间", "") or (row.get("_invoice_date", "") if invoice_only else "")
+        date_time = row.get("付款时间", "") or row.get("日期", "") or (row.get("_invoice_date", "") if invoice_only else "")
         date_value, _, time_value = date_time.partition(" ")
         invoice_status = row.get("是否有发票", "")
         merchant = row.get("商家名称") or row.get("收款方") or (row.get("_invoice_merchant") if invoice_only else "") or ""
@@ -676,7 +691,7 @@ def create_reimbursement_workbook(rows: Sequence[dict[str, str]], payment_images
     payment_sheet.cell(summary_header_row, 4, "无票")
     payment_sheet.cell(summary_value_row, 2, f"=E{total_row}")
     payment_sheet.cell(summary_value_row, 3, f'=SUMIF(G3:G{total_row - 1},"有票",E3:E{total_row - 1})+SUMIF(G3:G{total_row - 1},"仅发票",E3:E{total_row - 1})')
-    payment_sheet.cell(summary_value_row, 4, f'=SUMIF(G3:G{total_row - 1},"无票",E3:E{total_row - 1})')
+    payment_sheet.cell(summary_value_row, 4, f'=SUMIF(G3:G{total_row - 1},"无票",E3:E{total_row - 1})+SUMIF(G3:G{total_row - 1},"无票无支付记录",E3:E{total_row - 1})')
     for column in (2, 3, 4):
         payment_sheet.cell(summary_value_row, column).number_format = "0.00"
     payment_sheet.cell(note_detail_row, 1, "2")
@@ -788,7 +803,7 @@ def reimbursement_workbook_title(rows: Sequence[dict[str, str]], title_override:
     prefix = raw.split("（", 1)[0].split("(", 1)[0]
     period = reimbursement_period(rows)
     custom_title = title_override.strip()
-    if custom_title and period and not re.search(r'20\d{2}', custom_title):
+    if custom_title and period and period not in custom_title:
         custom_title = f'{custom_title}（{period}）'
     return custom_title or (f"{prefix}（{period}）" if period else prefix)
 
