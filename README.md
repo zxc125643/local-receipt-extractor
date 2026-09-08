@@ -18,7 +18,7 @@
 
 ```bash
 cp .env.example .env
-nano .env                 # 至少修改 RECEIPT_ACCESS_TOKEN
+nano .env                 # RECEIPT_ACCESS_TOKEN 留空即可免口令访问
 docker compose up -d --build
 docker compose ps
 ```

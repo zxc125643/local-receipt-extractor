@@ -8,7 +8,8 @@ services:
     environment:
       RECEIPT_DATA_DIR: /data
       RECEIPT_OCR_ENGINE: paddle
-      RECEIPT_ACCESS_TOKEN: "${RECEIPT_ACCESS_TOKEN:?Set RECEIPT_ACCESS_TOKEN in .env}"
+      # 留空即可关闭访问口令；如需保护局域网服务，再在 .env 中设置。
+      RECEIPT_ACCESS_TOKEN: "${RECEIPT_ACCESS_TOKEN:-}"
       RECEIPT_OCR_THREADS: "${RECEIPT_OCR_THREADS:-2}"
       RECEIPT_OCR_WORKERS: "${RECEIPT_OCR_WORKERS:-2}"
       PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK: "True"
