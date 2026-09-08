@@ -93,7 +93,15 @@ def test_receipt_endpoints_extract_requested_columns_and_export_xlsx(tmp_path: P
     assert extracted.status_code == 200
     assert extracted.json()["total"] == 1
     assert status.json()["completed"] == 1
-    assert status.json()["rows"] == [{"源文件": "receipt.jpg", "付款金额": "405.00", "付款时间": "2026-08-23 19:36:37", "商家名称": "本地餐厅", "是否有发票": "无"}]
+    row = status.json()["rows"][0]
+    assert row["源文件"] == "receipt.jpg"
+    assert row["付款金额"] == "405.00"
+    assert row["付款时间"] == "2026-08-23 19:36:37"
+    assert row["商家名称"] == "本地餐厅"
+    assert row["是否有发票"] == "无"
+    assert row["费用用途"] == "餐票"
+    assert row["分类置信度"] == "中"
+    assert row["分类依据"] == "商户类型：餐厅"
     assert exported.status_code == 200
     assert exported.headers["content-type"].startswith("application/vnd.openxmlformats-officedocument")
     receipts.jobs.clear()
@@ -177,6 +185,18 @@ def test_receipt_manual_entries_are_isolated_per_history_batch(tmp_path: Path, m
     assert by_id[job_ids[0]]["manual_entries"] == [{"金额": "8", "日期": "", "商家": "", "用途": "车票", "备注": ""}]
     assert by_id[job_ids[1]].get("manual_entries", []) == []
     receipts.jobs.clear()
+
+
+def test_saved_legacy_receipt_rows_gain_current_classification_rules():
+    saved = receipts._dedupe_saved({
+        "columns": ["付款金额", "商家名称"],
+        "rows": [{"源文件": "old.jpg", "付款金额": "800.00", "商家名称": "福润烟酒店"}],
+    })
+
+    assert {"费用用途", "分类置信度", "分类依据"}.issubset(saved["columns"])
+    assert saved["rows"][0]["费用用途"] == "其他"
+    assert saved["rows"][0]["分类置信度"] == "中"
+    assert "已排除住宿" in saved["rows"][0]["分类依据"]
 
 
 def test_event_bus_delivers_mail_received_payload(tmp_path: Path):

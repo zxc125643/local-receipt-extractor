@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from copy import copy
@@ -247,8 +248,12 @@ def extract_invoice_fields(lines: OCRLines) -> dict[str, str]:
     item_candidates = [
         line for line in cleaned
         if len(line) < 80
-        and any(token in line for token in ("餐饮", "住宿", "交通", "服务", "*"))
+        and any(token in line for token in (
+            "餐饮", "餐费", "住宿", "房费", "交通", "客运", "旅客", "运输", "通行费", "服务", "*",
+            "五金", "工具", "办公用品", "文具", "建材", "材料", "耗材", "配件", "电器", "设备",
+        ))
         and not any(token in line for token in ("更多服务", "更多发票", "发票查验", "国家税务", "数智化平台", "服务平台", "发票管家", "发送到邮箱", "打印二维码", "下载到手机"))
+        and not any(token in line for token in ("销售方", "销货方", "购买方", "名称：", "名称:", "有限公司", "有限责任公司"))
         and not re.search(r"[￥¥]\s*\d", line)
     ]
     invoice_item = next((line for line in item_candidates if "*" in line or "餐饮" in line or "住宿" in line), item_candidates[0] if item_candidates else "")
@@ -322,23 +327,131 @@ def build_invoice_record(source_name: str, lines: OCRLines) -> dict[str, str]:
     return invoice
 
 
-def classify_expense(row: dict[str, str]) -> str:
-    """Assign a conservative reimbursement category from merchant and item text."""
-    text = " ".join(
-        row.get(key, "")
-        for key in ("商家名称", "收款方", "商户全称", "商品", "商品名称", "备注", "_invoice_item", "_invoice_merchant")
-    ).lower()
-    # “烟酒店” means a tobacco/liquor shop, not lodging; avoid matching the
-    # embedded “酒店” substring as an accommodation expense.
-    text = text.replace("烟酒店", "烟酒商店")
-    categories = (
-        ("车票", ("客运发票", "道路客运", "客运车票", "运输服务", "通行费", "车票", "火车", "动车", "高铁", "机票", "航班")),
-        ("住宿费", ("酒店", "宾馆", "旅馆", "民宿", "住宿")),
-        ("交通费", ("滴滴", "高德", "打车", "出租", "地铁", "公交", "停车", "加油")),
-        ("工具/材料费", ("工具", "材料", "五金", "办公", "文具", "设备", "配件", "耗材", "采购", "商贸", "建材", "电器")),
-        ("餐票", ("餐", "饭", "食堂", "餐饮", "美团", "饿了么", "咖啡", "奶茶", "便利店")),
+@dataclass(frozen=True)
+class ExpenseClassification:
+    """Explainable result from the local reimbursement classification rules."""
+
+    category: str
+    confidence: str
+    reason: str
+    review_required: bool = False
+
+
+def _field_text(row: dict[str, str], keys: Sequence[str]) -> str:
+    return " ".join(str(row.get(key, "") or "").strip().lower() for key in keys).strip()
+
+
+def _first_term(text: str, terms: Sequence[str]) -> str:
+    return next((term for term in terms if term in text), "")
+
+
+def classify_expense_detail(row: dict[str, str]) -> ExpenseClassification:
+    """Classify from strongest evidence to weakest, without guessing conflicts.
+
+    Invoice item/tax-category text describes the actual transaction and takes
+    precedence over a merchant's registered name. Merchant rules are used only
+    when structured invoice evidence is absent. Broad or conflicting evidence
+    stays in ``其他`` and is surfaced for manual review.
+    """
+    invoice_item = _field_text(row, ("_invoice_item", "发票项目", "项目名称", "税收分类简称", "特定业务标签"))
+    product = _field_text(row, ("商品", "商品名称", "备注"))
+    merchant = _field_text(row, ("商家名称", "收款方", "商户全称", "_invoice_merchant"))
+
+    # A generic transport label is insufficient to distinguish passenger from
+    # freight. Explicit freight evidence must be handled before passenger rules.
+    freight = _first_term(invoice_item, ("货物运输", "物流运输", "搬运服务", "货运服务"))
+    if freight:
+        return ExpenseClassification("其他", "低", f"发票项目“{freight}”不是旅客运输，需人工确定费用用途", True)
+
+    item_rules = (
+        ("车票", ("铁路电子客票", "航空运输电子客票", "旅客运输服务", "道路客运", "客运发票", "客运车票", "火车票", "动车票", "高铁票", "机票", "通行费")),
+        ("住宿费", ("住宿服务", "客房费", "房费")),
+        ("餐票", ("餐饮服务", "餐费", "堂食服务")),
+        ("交通费", ("出租汽车客运", "网约车服务", "停车服务", "停车费", "成品油", "汽油", "柴油")),
+        ("工具/材料费", ("五金工具", "办公用品", "建筑材料", "装饰材料", "维修材料", "耗材", "配件", "电器", "设备")),
     )
-    return next((name for name, words in categories if any(word in text for word in words)), "其他")
+    for category, terms in item_rules:
+        term = _first_term(invoice_item, terms)
+        if term:
+            return ExpenseClassification(category, "高", f"发票项目：{term}")
+
+    generic_transport = _first_term(invoice_item, ("运输服务",))
+    if generic_transport:
+        return ExpenseClassification("车票", "中", "发票项目为运输服务，未发现货物运输特征")
+    ambiguous_parent = _first_term(invoice_item, ("生产生活服务", "生活服务", "服务费"))
+    if ambiguous_parent:
+        return ExpenseClassification("其他", "低", f"发票项目只有上级或笼统分类“{ambiguous_parent}”", True)
+
+    # Product/remark text is useful for payment-only screenshots, but is less
+    # authoritative than a structured invoice item.
+    product_rules = (
+        ("车票", ("旅客运输", "道路客运", "客运车票", "火车票", "动车票", "高铁票", "机票", "通行费", "运输服务")),
+        ("住宿费", ("酒店住宿", "住宿", "客房", "房费")),
+        ("餐票", ("餐饮", "餐费", "晚餐", "午餐", "早餐", "工作餐")),
+        ("交通费", ("滴滴", "高德打车", "网约车", "出租车", "地铁", "公交", "停车", "加油")),
+        ("工具/材料费", ("五金", "工具", "办公用品", "文具", "建材", "材料", "耗材", "配件", "电器")),
+    )
+    for category, terms in product_rules:
+        term = _first_term(product, terms)
+        if term:
+            return ExpenseClassification(category, "中", f"商品或备注：{term}")
+
+    # Resolve compound merchant names before broad terms such as “酒店”.
+    tobacco = _first_term(merchant, ("烟酒店", "烟酒商店", "烟酒商行", "烟酒行", "烟酒超市"))
+    if tobacco:
+        return ExpenseClassification("其他", "中", f"商户类型：{tobacco}；已排除住宿")
+    hotel_supplies = _first_term(merchant, ("酒店用品", "酒店设备", "酒店家具", "酒店餐具", "宾馆用品"))
+    if hotel_supplies:
+        return ExpenseClassification("工具/材料费", "中", f"商户类型：{hotel_supplies}；已排除住宿")
+    hotel_management = _first_term(merchant, ("酒店管理", "住宿管理"))
+    if hotel_management:
+        return ExpenseClassification("其他", "低", f"商户名称含“{hotel_management}”，但不能证明实际住宿", True)
+
+    merchant_rules = (
+        ("车票", ("客运站", "客运公司", "铁路", "航空", "机场", "票务")),
+        ("住宿费", ("宾馆", "旅馆", "旅社", "民宿", "客栈", "度假村", "酒店")),
+        ("交通费", ("滴滴", "高德", "出租车", "网约车", "地铁", "公交", "停车场", "加油站")),
+        ("工具/材料费", ("五金", "工具", "建材", "办公用品", "文具", "耗材", "配件", "电器")),
+        ("餐票", ("餐饮", "餐厅", "饭店", "餐馆", "菜馆", "酒楼", "食府", "小厨", "快餐", "小吃", "食堂", "咖啡", "奶茶", "茶饮", "烧烤")),
+    )
+    for category, terms in merchant_rules:
+        term = _first_term(merchant, terms)
+        if term:
+            return ExpenseClassification(category, "中", f"商户类型：{term}")
+
+    weak = _first_term(" ".join((invoice_item, product, merchant)), ("便利店", "超市", "商贸", "采购", "服务"))
+    reason = f"仅识别到模糊词“{weak}”，无法可靠确定费用用途" if weak else "没有足够信息确定费用用途"
+    return ExpenseClassification("其他", "低", reason, True)
+
+
+def classify_expense(row: dict[str, str]) -> str:
+    """Backward-compatible category-only interface used by workbook export."""
+    return classify_expense_detail(row).category
+
+
+def enrich_expense_classifications(
+    columns: Sequence[str], rows: Sequence[dict[str, str]]
+) -> tuple[list[str], list[dict[str, str]]]:
+    """Attach explainable classifications to new or previously saved rows."""
+    result_columns = list(columns)
+    for column in ("费用用途", "分类置信度", "分类依据"):
+        if column not in result_columns:
+            result_columns.append(column)
+    enriched_rows = list(rows)
+    for row in enriched_rows:
+        detail = classify_expense_detail(row)
+        row["费用用途"] = detail.category
+        row["分类置信度"] = detail.confidence
+        row["分类依据"] = detail.reason
+        row["_expense_category"] = detail.category
+        if detail.review_required:
+            if "核对状态" not in result_columns:
+                result_columns.append("核对状态")
+            row["核对状态"] = "需人工核对"
+            previous_reason = str(row.get("_review_reason", "")).strip()
+            if detail.reason not in previous_reason:
+                row["_review_reason"] = "；".join(value for value in (previous_reason, detail.reason) if value)
+    return result_columns, enriched_rows
 
 
 def _date_text(value: str) -> tuple[int, int, int] | None:
@@ -505,6 +618,8 @@ def build_payment_rows(columns: Sequence[str], documents: Sequence[tuple[str, OC
                     row[column] = matched[alias]
             row["是否有发票"] = "有（金额匹配）"
             row["_invoice_source"] = matched["_source"]
+            row["_invoice_item"] = matched.get("invoice_item", "")
+            row["_invoice_merchant"] = matched.get("invoice_merchant", "")
             matched_invoice_sources.add(matched["_source"])
             if matched["invoice_date"]:
                 row["_invoice_date"] = matched["invoice_date"]
@@ -565,7 +680,11 @@ def build_payment_rows(columns: Sequence[str], documents: Sequence[tuple[str, OC
             elif alias == "product_name":
                 row[column] = invoice.get("invoice_item", "")
         rows.append(row)
-    return result_columns, rows
+
+    # Classification is part of the extracted result, not only a formatting
+    # decision made later during Excel export. This keeps preview, history and
+    # re-export behavior consistent and makes every automatic choice auditable.
+    return enrich_expense_classifications(result_columns, rows)
 
 
 def create_workbook(columns: Sequence[str], rows: Sequence[dict[str, str]]) -> bytes:
@@ -695,8 +814,9 @@ def create_reimbursement_workbook(rows: Sequence[dict[str, str]], payment_images
         date_value, _, time_value = date_time.partition(" ")
         invoice_status = row.get("是否有发票", "")
         merchant = row.get("商家名称") or row.get("收款方") or (row.get("_invoice_merchant") if invoice_only else "") or ""
-        expense = row.get("_invoice_item") if invoice_only else ""
-        values = [index - 2, date_value, time_value, merchant, amount, expense or (str(row.get("商品名称", "")) or str(row.get("备注", "")) if row.get("_manual") else classify_expense(row)), "无票无支付记录" if row.get("_manual") else ("仅发票" if invoice_only else ("有票" if invoice_status.startswith("有") else "无票"))]
+        classified_expense = str(row.get("_expense_category", "")) or classify_expense(row)
+        expense = str(row.get("商品名称", "")) or str(row.get("备注", "")) if row.get("_manual") else classified_expense
+        values = [index - 2, date_value, time_value, merchant, amount, expense, "无票无支付记录" if row.get("_manual") else ("仅发票" if invoice_only else ("有票" if invoice_status.startswith("有") else "无票"))]
         for column, value in enumerate(values, start=1):
             source = source_sheet.cell(3, column)
             target = payment_sheet.cell(index, column, _excel_safe(value))

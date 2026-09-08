@@ -90,7 +90,7 @@ export function ReceiptExtractorPage() {
       })).catch(() => undefined);
       const reviewCount = data.rows.filter((row) => row["核对状态"] === "需人工核对").length;
       setNotice({ tone: reviewCount ? "info" : (data.duplicate_count ? "info" : "success"), text: `已在本机识别 ${data.rows.length} 张图片。${data.duplicate_count ? `发现重复图片 ${data.duplicate_count} 张，已跳过重复计算。` : "未发现重复图片。"}${reviewCount ? `有 ${reviewCount} 条需要人工核对。` : ""} 请核对后导出 Excel。` });
-      if (reviewCount) window.alert(`人工核对\n\n发现 ${reviewCount} 条记录存在关键字段无法确认，系统已留空，不能直接作为最终报销数据。请人工核对后再导出。`);
+      if (reviewCount) window.alert(`人工核对\n\n发现 ${reviewCount} 条记录存在关键字段或费用用途无法可靠确认。请查看“核对状态”和“分类依据”，人工核对后再导出。`);
     },
     onError: (error) => setNotice({ tone: "error", text: error instanceof Error ? error.message : "识别失败。" }),
   });
@@ -141,7 +141,7 @@ export function ReceiptExtractorPage() {
         <label className="filter-field">
           <span className="field-label">要提取的列</span>
           <textarea className="text-input receipt-columns" value={columnsText} onChange={(event) => setColumnsText(event.target.value)} />
-          <span className="field-hint">用逗号或换行分隔。首版支持：付款金额、付款时间、商家名称、商品名称、备注、交易单号、发票金额、发票号码；系统会自动增加“是否有发票”。</span>
+          <span className="field-hint">用逗号或换行分隔。支持：付款金额、付款时间、商家名称、商品名称、备注、交易单号、发票金额、发票号码；系统会自动增加发票状态、费用用途、分类置信度和分类依据。</span>
         </label>
         <input ref={fileInput} className="hidden-file-input" accept="image/jpeg,image/png,image/webp,application/pdf" multiple type="file" onChange={(event) => setFiles(Array.from(event.target.files ?? []))} />
         <div className="receipt-actions">

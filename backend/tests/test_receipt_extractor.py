@@ -9,6 +9,7 @@ from backend.app.services.receipt_extractor import (
     build_row,
     clean_columns,
     classify_expense,
+    classify_expense_detail,
     create_reimbursement_workbook,
     create_workbook,
     extract_invoice_fields,
@@ -78,6 +79,26 @@ def test_extract_invoice_uses_tax_inclusive_total_from_digital_invoice():
     assert fields["invoice_merchant"] == ""
 
 
+def test_invoice_seller_name_is_not_mistaken_for_invoice_item():
+    fields = extract_invoice_fields([
+        "电子发票", "价税合计", "405.00", "发票号码", "INV123456",
+        "销售方信息", "名称：孝昌那些年餐饮服务管理有限公司",
+    ])
+
+    assert fields["invoice_merchant"] == "孝昌那些年餐饮服务管理有限公司"
+    assert fields["invoice_item"] == ""
+
+
+def test_invoice_item_extraction_supports_goods_without_service_keyword():
+    fields = extract_invoice_fields([
+        "电子发票", "项目名称", "办公用品", "价税合计", "120.00",
+        "销售方信息", "名称：某某商贸有限公司",
+    ])
+
+    assert fields["invoice_item"] == "办公用品"
+    assert classify_expense_detail({"_invoice_item": fields["invoice_item"]}).category == "工具/材料费"
+
+
 def test_build_row_only_includes_requested_columns():
     row = build_row(["付款金额", "付款时间", "商家名称", "备注", "不存在的字段"], SAMPLE_LINES, "receipt.jpg")
 
@@ -122,16 +143,17 @@ def test_build_payment_rows_requires_amount_and_identity_evidence_to_match_invoi
         ],
     )
 
-    assert columns == ["付款金额", "发票金额", "发票号码", "是否有发票"]
-    assert rows[0] == {
-        "源文件": "payment.jpg",
-        "付款金额": "405.00",
-        "发票金额": "405.00",
-        "发票号码": "INV123456",
-        "是否有发票": "有（金额匹配）",
-        "_invoice_source": "invoice.jpg",
-        "_invoice_date": "2026-08-23",
-    }
+    assert columns[:4] == ["付款金额", "发票金额", "发票号码", "是否有发票"]
+    assert {"费用用途", "分类置信度", "分类依据"}.issubset(columns)
+    assert rows[0]["源文件"] == "payment.jpg"
+    assert rows[0]["付款金额"] == "405.00"
+    assert rows[0]["发票金额"] == "405.00"
+    assert rows[0]["发票号码"] == "INV123456"
+    assert rows[0]["是否有发票"] == "有（金额匹配）"
+    assert rows[0]["_invoice_source"] == "invoice.jpg"
+    assert rows[0]["_invoice_date"] == "2026-08-23"
+    assert rows[0]["费用用途"] == "餐票"
+    assert rows[0]["分类置信度"] == "中"
     assert rows[1]["源文件"] == "unmatched.jpg"
     assert rows[1]["付款金额"] == "99.00"
     assert rows[1]["是否有发票"] == "仅发票（无支付记录）"
@@ -146,10 +168,12 @@ def test_same_amount_without_date_or_merchant_evidence_is_not_force_matched():
         ],
     )
 
-    assert columns == ["付款金额", "是否有发票", "核对状态"]
+    assert columns[:3] == ["付款金额", "是否有发票", "核对状态"]
+    assert {"费用用途", "分类置信度", "分类依据"}.issubset(columns)
     assert rows[0]["是否有发票"] == "无"
     assert rows[0]["核对状态"] == "需人工核对"
-    assert rows[0]["_review_reason"] == "存在同金额发票，但日期或商家无法确认"
+    assert "存在同金额发票，但日期或商家无法确认" in rows[0]["_review_reason"]
+    assert "没有足够信息确定费用用途" in rows[0]["_review_reason"]
     assert rows[1]["是否有发票"] == "仅发票（无支付记录）"
 
 
@@ -227,8 +251,62 @@ def test_expense_classification_has_requested_categories():
     assert classify_expense({"商家名称": "五金工具店"}) == "工具/材料费"
     assert classify_expense({"商家名称": "滴滴出行"}) == "交通费"
     assert classify_expense({"商家名称": "某餐饮店"}) == "餐票"
+    assert classify_expense({"商家名称": "本地餐厅"}) == "餐票"
     assert classify_expense({"商家名称": "福润烟酒店"}) == "其他"
     assert classify_expense({"商家名称": "未知商户"}) == "其他"
+
+
+def test_expense_classification_prefers_invoice_item_over_merchant_name():
+    detail = classify_expense_detail({
+        "商家名称": "某某酒店管理有限公司",
+        "_invoice_item": "*金属制品*五金工具",
+    })
+
+    assert detail.category == "工具/材料费"
+    assert detail.confidence == "高"
+    assert detail.review_required is False
+    assert "发票项目" in detail.reason
+
+
+def test_expense_classification_uses_general_conflict_exclusions():
+    assert classify_expense({"商家名称": "福润烟酒店"}) == "其他"
+    assert classify_expense({"商家名称": "宏达烟酒商行"}) == "其他"
+    assert classify_expense({"商家名称": "华美酒店用品商店"}) == "工具/材料费"
+    assert classify_expense({"商家名称": "兴业酒店设备有限公司"}) == "工具/材料费"
+    assert classify_expense({"商家名称": "孝昌如家酒店"}) == "住宿费"
+
+
+def test_expense_classification_distinguishes_passenger_and_freight_transport():
+    passenger = classify_expense_detail({"_invoice_item": "*运输服务*旅客运输服务"})
+    generic = classify_expense_detail({"_invoice_item": "*运输服务*运输服务"})
+    freight = classify_expense_detail({"_invoice_item": "*运输服务*货物运输服务"})
+
+    assert (passenger.category, passenger.confidence, passenger.review_required) == ("车票", "高", False)
+    assert (generic.category, generic.confidence, generic.review_required) == ("车票", "中", False)
+    assert (freight.category, freight.confidence, freight.review_required) == ("其他", "低", True)
+
+
+def test_expense_classification_explains_ambiguous_and_unknown_records():
+    ambiguous = classify_expense_detail({"商家名称": "某某酒店管理有限公司"})
+    unknown = classify_expense_detail({"商家名称": "未知商户"})
+
+    assert (ambiguous.category, ambiguous.confidence, ambiguous.review_required) == ("其他", "低", True)
+    assert "不能证明实际住宿" in ambiguous.reason
+    assert (unknown.category, unknown.confidence, unknown.review_required) == ("其他", "低", True)
+
+
+def test_payment_rows_include_explainable_expense_classification():
+    columns, rows = build_payment_rows(
+        ["付款金额", "商家名称"],
+        [("payment.jpg", SAMPLE_LINES)],
+    )
+
+    assert "费用用途" in columns
+    assert "分类置信度" in columns
+    assert "分类依据" in columns
+    assert rows[0]["费用用途"] == "餐票"
+    assert rows[0]["分类置信度"] == "中"
+    assert "商户类型" in rows[0]["分类依据"]
 
 
 def test_reimbursement_export_keeps_unmatched_invoice_as_standalone_reimbursement():
@@ -247,6 +325,24 @@ def test_reimbursement_export_keeps_unmatched_invoice_as_standalone_reimbursemen
     assert list(workbook["发票单独报销"].values)[2][:6] == (1, None, None, "发票单独报销", 2400.0, "26424000000104330311")
     assert len(workbook["支付明细"]._images) == 1
     assert len(workbook["发票单独报销"]._images) == 1
+
+
+def test_invoice_only_payment_summary_uses_classified_expense_not_raw_tax_item():
+    content = create_reimbursement_workbook(
+        [{
+            "源文件": "invoice.pdf",
+            "是否有发票": "仅发票（无支付记录）",
+            "_invoice_amount": "88.00",
+            "_invoice_item": "*生产生活服务*餐饮服务",
+            "_invoice_source": "invoice.pdf",
+            "_invoice_only": "1",
+        }],
+        {},
+        {},
+    )
+    workbook = load_workbook(BytesIO(content), data_only=False)
+
+    assert workbook["支付明细"]["F3"].value == "餐票"
 
 
 def test_reimbursement_export_totals_manual_only_entries():

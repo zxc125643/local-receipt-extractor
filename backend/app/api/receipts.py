@@ -14,7 +14,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import Response
 
 from backend.app.api.deps import assert_desktop_auth
-from backend.app.services.receipt_extractor import LocalReceiptExtractor, build_invoice_record, build_payment_rows, clean_columns, create_reimbursement_workbook, is_invoice, reimbursement_workbook_title
+from backend.app.services.receipt_extractor import LocalReceiptExtractor, build_invoice_record, build_payment_rows, clean_columns, create_reimbursement_workbook, enrich_expense_classifications, is_invoice, reimbursement_workbook_title
 
 router = APIRouter(prefix="/receipts", tags=["receipts"], dependencies=[Depends(assert_desktop_auth)])
 ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp", "application/pdf"}
@@ -52,6 +52,8 @@ def _dedupe_saved(data: dict[str, object]) -> dict[str, object]:
         if not any(key) or key in seen:
             continue
         seen.add(key); unique.append(row)
+    columns, unique = enrich_expense_classifications(columns, unique)
+    data['columns'] = columns
     data['rows'] = unique
     return data
 
