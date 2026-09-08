@@ -75,7 +75,11 @@ export function ReceiptExtractorPage() {
   const processMutation = useMutation({
     mutationFn: ({ columns, files, workerCount, title }: { columns: string[]; files: File[]; workerCount: number; title: string }) => processReceiptImages({ columns, files, workerCount, title }, setProgress),
     onSuccess: (data) => {
-      setResult(data);
+      // Keep any entries typed while OCR was running and bind them to the
+      // newly completed batch through the persistence effect below.
+      setResultExpanded(true);
+      setManualSaveState('');
+      updateResult(data);
       void getReceiptHistory().then(setHistory).catch(() => undefined);
       const reviewCount = data.rows.filter((row) => row["核对状态"] === "需人工核对").length;
       setNotice({ tone: reviewCount ? "info" : (data.duplicate_count ? "info" : "success"), text: `已在本机识别 ${data.rows.length} 张图片。${data.duplicate_count ? `发现重复图片 ${data.duplicate_count} 张，已跳过重复计算。` : "未发现重复图片。"}${reviewCount ? `有 ${reviewCount} 条需要人工核对。` : ""} 请核对后导出 Excel。` });
@@ -97,7 +101,11 @@ export function ReceiptExtractorPage() {
       setNotice({ tone: "error", text: "请先选择图片。" });
       return;
     }
-    setResult(null);
+    if (result) {
+      setManualEntries([]);
+      setManualText("");
+    }
+    updateResult(null);
     setProgress({ completed: 0, total: files.length, currentFile: "", status: "queued" });
     setNotice({ tone: "info", text: "正在本机识别，图片不会上传到云端。" });
     processMutation.mutate({ columns, files, workerCount, title: reportTitle });
@@ -154,8 +162,8 @@ export function ReceiptExtractorPage() {
         <div className="table-shell"><table className="data-table"><thead><tr><th>源文件</th>{result.columns.map((column) => <th key={column}>{column}</th>)}</tr></thead><tbody>{result.rows.map((row, index) => <tr key={`${row["源文件"]}-${index}`}><td>{row["源文件"]}</td>{result.columns.map((column) => <td key={column}>{row[column] || "—"}</td>)}</tr>)}</tbody></table></div></> : <p className="muted-text">已收起，共 {result.rows.length} 条识别记录。</p>}
       </div> : null}
       <div className="panel receipt-manual">
-        <p className="muted-text">{result ? manualSaveState : '请先识别图片或打开一条历史记录，再补录费用。新批次不会沿用旧补录。'}</p>
-        <fieldset disabled={!result} style={{ border: 0, padding: 0, margin: 0 }}>
+        <p className="muted-text">{result ? manualSaveState : (processMutation.isPending ? '可以边识别边补录；识别完成后会自动保存到本次批次。' : '请先开始识别或打开一条历史记录，再补录费用。新批次不会沿用旧补录。')}</p>
+        <fieldset disabled={!result && !processMutation.isPending} style={{ border: 0, padding: 0, margin: 0 }}>
         <div className="panel-header"><div><h3>手工补录（无票无支付记录）</h3><p className="muted-text">用于没有支付截图、也没有发票的项目；导出类型标记为“无票无支付记录”。</p></div></div>
         <textarea className="text-input receipt-columns" value={manualText} onChange={(e) => setManualText(e.target.value)} placeholder={'支持简写：出差餐补320\n车票8+8.43+105+10\n也支持：金额，日期，商家，用途，备注'} />
         <div className="receipt-actions"><span className="field-hint">金额必填，其余字段可留空；支持一次粘贴多行。</span><button className="secondary-button" type="button" onClick={() => {
