@@ -227,6 +227,7 @@ def test_expense_classification_has_requested_categories():
     assert classify_expense({"商家名称": "五金工具店"}) == "工具/材料费"
     assert classify_expense({"商家名称": "滴滴出行"}) == "交通费"
     assert classify_expense({"商家名称": "某餐饮店"}) == "餐票"
+    assert classify_expense({"商家名称": "福润烟酒店"}) == "其他"
     assert classify_expense({"商家名称": "未知商户"}) == "其他"
 
 

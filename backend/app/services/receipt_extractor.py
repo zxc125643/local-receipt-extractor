@@ -328,6 +328,9 @@ def classify_expense(row: dict[str, str]) -> str:
         row.get(key, "")
         for key in ("商家名称", "收款方", "商户全称", "商品", "商品名称", "备注", "_invoice_item", "_invoice_merchant")
     ).lower()
+    # “烟酒店” means a tobacco/liquor shop, not lodging; avoid matching the
+    # embedded “酒店” substring as an accommodation expense.
+    text = text.replace("烟酒店", "烟酒商店")
     categories = (
         ("车票", ("客运发票", "道路客运", "客运车票", "运输服务", "通行费", "车票", "火车", "动车", "高铁", "机票", "航班")),
         ("住宿费", ("酒店", "宾馆", "旅馆", "民宿", "住宿")),
