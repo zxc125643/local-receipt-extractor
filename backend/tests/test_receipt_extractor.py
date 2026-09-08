@@ -204,6 +204,31 @@ def test_invoice_does_not_match_when_date_evidence_is_missing():
     assert rows[1]["是否有发票"] == "仅发票（无支付记录）"
 
 
+def test_same_date_and_amount_do_not_match_weakly_similar_merchants():
+    _columns, rows = build_payment_rows(
+        ["付款金额", "付款时间", "商家名称"],
+        [
+            ("payment.jpg", ["付款金额", "550.00", "支付时间", "2026年9月5日 12:00:00", "商户全称", "孝昌甲餐饮有限公司"]),
+            ("invoice.jpg", ["电子发票", "价税合计", "550.00", "开票日期", "2026年9月5日", "销售方名称", "孝昌乙餐饮有限公司"]),
+        ],
+    )
+
+    assert rows[0]["是否有发票"] == "无"
+    assert rows[1]["是否有发票"] == "仅发票（无支付记录）"
+
+
+def test_invoice_only_missing_identity_fields_requires_manual_review():
+    columns, rows = build_payment_rows(
+        ["付款金额", "付款时间", "商家名称"],
+        [("invoice.jpg", ["电子发票", "价税合计", "88.00", "发票号码", "INV12345678"])],
+    )
+
+    assert "核对状态" in columns
+    assert rows[0]["核对状态"] == "需人工核对"
+    assert "发票日期" in rows[0]["_review_reason"]
+    assert "销售方" in rows[0]["_review_reason"]
+
+
 def test_clean_columns_splits_chinese_enumeration_commas():
     assert clean_columns(["付款金额、付款时间、商家名称、备注"]) == ["付款金额", "付款时间", "商家名称", "备注"]
 
@@ -368,6 +393,21 @@ def test_payment_export_includes_classification_audit_columns():
     assert headers[7:11] == ["分类置信度", "分类依据", "核对状态", "付款截图"]
 
 
+def test_embedded_receipt_image_is_aspect_fitted_and_centered():
+    image_buffer = BytesIO()
+    Image.new("RGB", (20, 20), "white").save(image_buffer, format="PNG")
+    content = create_reimbursement_workbook(
+        [{"源文件": "square.png", "付款金额": "10.00", "是否有发票": "无"}],
+        {"square.png": image_buffer.getvalue()},
+        {},
+    )
+    workbook = load_workbook(BytesIO(content), data_only=False)
+    embedded = workbook["支付明细"]._images[0]
+
+    assert embedded.width == embedded.height
+    assert embedded.anchor._from.rowOff > 0
+
+
 def test_text_pdf_reads_every_page_including_invoice_text():
     import pymupdf
     from backend.app.services.receipt_extractor import LocalReceiptExtractor
@@ -382,6 +422,39 @@ def test_text_pdf_reads_every_page_including_invoice_text():
 
     assert any("Invoice" in line for line in lines)
     assert any("Total" in line for line in lines)
+
+
+def test_corrupted_invoice_pdf_text_layer_falls_back_to_page_ocr(monkeypatch):
+    from backend.app.services.receipt_extractor import LocalReceiptExtractor
+
+    class FakeTextPage:
+        def extract_text(self):
+            return "电子发票\n开票日期：\n2025/7/4 15:52 localhost:63342/template\n\x00\x01"
+
+    class FakePixmap:
+        def tobytes(self, _format):
+            return b"not-a-real-png"
+
+    class FakeRenderedPage:
+        def get_pixmap(self, **_kwargs):
+            return FakePixmap()
+
+    class FakeDocument:
+        def __iter__(self):
+            return iter([FakeRenderedPage()])
+
+        def close(self):
+            return None
+
+    monkeypatch.setattr("pypdf.PdfReader", lambda _stream: type("Reader", (), {"pages": [FakeTextPage()]})())
+    monkeypatch.setattr("pymupdf.open", lambda **_kwargs: FakeDocument())
+    extractor = LocalReceiptExtractor.__new__(LocalReceiptExtractor)
+    extractor.engine = "rapidocr"
+    extractor._ocr = lambda _image: ([(None, "开票日期：2026年09月05日", 1.0)], 0.1)
+
+    lines = extractor.read(b"%PDF fake")
+
+    assert lines == ["开票日期：2026年09月05日"]
 
 
 def test_invoice_only_payment_summary_uses_classified_expense_not_raw_tax_item():

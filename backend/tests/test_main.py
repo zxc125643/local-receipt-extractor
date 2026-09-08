@@ -127,4 +127,5 @@ def test_ocr_identity_deduplication_is_independent_of_selected_columns(tmp_path,
     assert started.json()["duplicate_count"] == 0
     assert len(status.json()["rows"]) == 1
     assert status.json()["duplicate_count"] == 1
+    assert status.json()["duplicate_files"] == ["same-transaction.jpg"]
     assert history.json()[0]["duplicate_count"] == 1

@@ -107,12 +107,24 @@ def _dedupe_saved(data: dict[str, object]) -> dict[str, object]:
     source_rows = data.get("rows", [])
     rows = source_rows if isinstance(source_rows, list) else []
     typed_rows = [row for row in rows if isinstance(row, dict)]
-    unique, removed = deduplicate_rows(typed_rows)
+    unique, duplicate_sources = deduplicate_rows(typed_rows)
     columns, unique = enrich_expense_classifications(columns, unique)
     data["columns"] = columns
     data["rows"] = unique
-    data["result_duplicate_count"] = int(data.get("result_duplicate_count", 0) or 0) + removed
+    data["duplicate_count"] = int(data.get("duplicate_count", 0) or 0) + len(duplicate_sources)
+    data["duplicate_files"] = list(dict.fromkeys([*(data.get("duplicate_files", []) or []), *duplicate_sources]))
     return data
+
+
+def _update_saved_manual(job_id: str, entries: list[dict[str, object]], draft: str) -> bool:
+    with sqlite3.connect(_history_db()) as db:
+        saved = db.execute("SELECT rows_json FROM receipt_batches WHERE id=?", (job_id,)).fetchone()
+        if not saved:
+            return False
+        data = json.loads(saved[0])
+        data.update(manual_entries=entries, manual_draft=draft)
+        db.execute("UPDATE receipt_batches SET rows_json=? WHERE id=?", (json.dumps(data, ensure_ascii=False), job_id))
+    return True
 
 
 def _persist_job(job: ReceiptJob) -> None:
@@ -163,8 +175,9 @@ def _run_job_sync(job: ReceiptJob, requested_columns: list[str]) -> None:
     documents = [(name, lines) for (name, _), lines in zip(job.files, results, strict=True)]
     job.invoices = [build_invoice_record(name, lines) for name, lines in documents if is_invoice(lines)]
     job.columns, job.rows = build_payment_rows(requested_columns, documents)
-    job.rows, result_duplicates = deduplicate_rows(job.rows)
-    job.duplicate_count += result_duplicates
+    job.rows, result_duplicate_files = deduplicate_rows(job.rows)
+    job.duplicate_count += len(result_duplicate_files)
+    job.duplicate_files.extend(name for name in result_duplicate_files if name not in job.duplicate_files)
     _persist_job(job)
 
 
@@ -273,18 +286,10 @@ def save_manual(job_id: str, payload: dict[str, object]) -> dict[str, object]:
         with job.lock:
             job.manual_entries = entries
             job.manual_draft = draft
-            with sqlite3.connect(_history_db()) as db:
-                saved = db.execute("SELECT rows_json FROM receipt_batches WHERE id=?", (job_id,)).fetchone()
-                if saved:
-                    data = json.loads(saved[0]); data.update(manual_entries=entries, manual_draft=draft)
-                    db.execute("UPDATE receipt_batches SET rows_json=? WHERE id=?", (json.dumps(data, ensure_ascii=False), job_id))
+            _update_saved_manual(job_id, entries, draft)
     else:
-        with sqlite3.connect(_history_db()) as db:
-            saved = db.execute("SELECT rows_json FROM receipt_batches WHERE id=?", (job_id,)).fetchone()
-            if not saved:
-                raise HTTPException(status_code=404, detail="找不到该历史批次。")
-            data = json.loads(saved[0]); data.update(manual_entries=entries, manual_draft=draft)
-            db.execute("UPDATE receipt_batches SET rows_json=? WHERE id=?", (json.dumps(data, ensure_ascii=False), job_id))
+        if not _update_saved_manual(job_id, entries, draft):
+            raise HTTPException(status_code=404, detail="找不到该历史批次。")
     return {"job_id": job_id, "saved": True}
 
 

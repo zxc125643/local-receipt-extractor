@@ -6,7 +6,6 @@ from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from copy import copy
 from collections.abc import Callable, Sequence
-from difflib import SequenceMatcher
 from io import BytesIO
 from os import getenv
 from pathlib import Path
@@ -16,6 +15,10 @@ from openpyxl import Workbook, load_workbook
 from openpyxl.drawing.image import Image as ExcelImage
 from openpyxl.cell.cell import ILLEGAL_CHARACTERS_RE
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+from openpyxl.drawing.spreadsheet_drawing import AnchorMarker, OneCellAnchor
+from openpyxl.drawing.xdr import XDRPositiveSize2D
+from openpyxl.utils.cell import coordinate_to_tuple
+from openpyxl.utils.units import pixels_to_EMU
 
 
 OCRLines = Sequence[str]
@@ -163,6 +166,14 @@ def _usable_invoice_merchant(value: str) -> str:
         return ""
     if any(token in compact for token in ("电子发票", "增值税发票", "发票号码", "发票代码", "开票日期", "价税合计", "小写", "金额", "税额", "开票人", "收款人", "复核", "更多服务", "更多发票", "发送到邮箱", "打印二维码", "下载到手机", "发票管家")):
         return ""
+    return compact
+
+
+def _merchant_identity(value: str) -> str:
+    """Remove legal/business boilerplate while preserving the distinctive name."""
+    compact = re.sub(r"\s+", "", value).lower()
+    for generic in ("有限责任公司", "股份有限公司", "有限公司", "餐饮服务管理", "餐饮服务", "服务管理", "餐饮", "管理", "公司"):
+        compact = compact.replace(generic, "")
     return compact
 
 
@@ -493,11 +504,11 @@ def _mark_for_review(row: dict[str, str], reason: str) -> None:
         row["_review_reason"] = "；".join(value for value in (previous, reason) if value)
 
 
-def deduplicate_rows(rows: Sequence[dict[str, str]]) -> tuple[list[dict[str, str]], int]:
+def deduplicate_rows(rows: Sequence[dict[str, str]]) -> tuple[list[dict[str, str]], list[str]]:
     """Deduplicate transactions by stable OCR identity, independent of display columns."""
     unique: list[dict[str, str]] = []
     seen: set[tuple[str, ...]] = set()
-    duplicates = 0
+    duplicate_sources: list[str] = []
     for row in rows:
         transaction = str(row.get("_transaction_number") or row.get("交易单号") or row.get("订单号") or "").strip()
         invoice_number = str(row.get("_invoice_number") or row.get("发票号码") or "").strip()
@@ -511,11 +522,11 @@ def deduplicate_rows(rows: Sequence[dict[str, str]]) -> tuple[list[dict[str, str
             merchant = re.sub(r"\s+", "", str(row.get("_payment_merchant") or row.get("_invoice_merchant") or row.get("商家名称") or row.get("收款方") or "")).lower()
             key = ("evidence", amount, date, merchant) if amount and (date or merchant) else ("source", str(row.get("源文件", "")))
         if key in seen:
-            duplicates += 1
+            duplicate_sources.append(str(row.get("源文件", "")))
             continue
         seen.add(key)
         unique.append(row)
-    return unique, duplicates
+    return unique, duplicate_sources
 
 
 def _date_text(value: str) -> tuple[int, int, int] | None:
@@ -548,6 +559,14 @@ def is_invoice(lines: OCRLines) -> bool:
     markers = sum(marker in text for marker in ("发票", "电子发票", "增值税", "价税合计", "税额", "开票日期", "发票号码"))
     long_number = bool(re.search(r"\d{8,24}", text))
     return markers >= 1 and (markers >= 2 or long_number)
+
+
+def _pdf_text_is_reliable(lines: OCRLines) -> bool:
+    """Reject broken browser-generated text layers that contain preview metadata or controls."""
+    text = "\n".join(lines)
+    if "localhost:" in text.lower() or any(ord(char) < 32 and char not in "\r\n\t" for char in text):
+        return False
+    return bool(text.strip())
 
 
 def _is_train_ticket(lines: OCRLines) -> bool:
@@ -664,14 +683,17 @@ def build_payment_rows(columns: Sequence[str], documents: Sequence[tuple[str, OC
             date_known = bool(payment_date and invoice_date)
             merchant_known = bool(payment_merchant and invoice_merchant)
             date_ok = date_known and payment_date == invoice_date
-            payment_bigrams = {payment_merchant[i:i + 2] for i in range(len(payment_merchant) - 1)}
-            invoice_bigrams = {invoice_merchant[i:i + 2] for i in range(len(invoice_merchant) - 1)}
-            meaningful_common = (payment_bigrams & invoice_bigrams) - {"公司", "服务", "餐饮", "孝昌"}
-            merchant_ok = merchant_known and (
-                payment_merchant in invoice_merchant
-                or invoice_merchant in payment_merchant
-                or SequenceMatcher(None, payment_merchant, invoice_merchant).ratio() >= 0.28
-                or bool(meaningful_common)
+            payment_identity = _merchant_identity(payment_merchant)
+            invoice_identity = _merchant_identity(invoice_merchant)
+            payment_bigrams = {payment_identity[i:i + 2] for i in range(len(payment_identity) - 1)}
+            invoice_bigrams = {invoice_identity[i:i + 2] for i in range(len(invoice_identity) - 1)}
+            meaningful_common = (payment_bigrams & invoice_bigrams) - {
+                "公司", "有限", "服务", "管理", "餐饮", "商贸", "湖北", "武汉", "孝昌", "深圳",
+            }
+            merchant_ok = merchant_known and bool(payment_identity and invoice_identity) and (
+                payment_identity in invoice_identity
+                or invoice_identity in payment_identity
+                or len(meaningful_common) >= 2
             )
             if date_known and merchant_known:
                 if merchant_ok and '住宿' in invoice.get('invoice_item', ''):
@@ -744,6 +766,15 @@ def build_payment_rows(columns: Sequence[str], documents: Sequence[tuple[str, OC
         row["是否有发票"] = "仅发票（无支付记录）"
         row["_invoice_source"] = source
         row["_invoice_only"] = "1"
+        missing_invoice_fields = []
+        if not date:
+            missing_invoice_fields.append("发票日期")
+        if not merchant:
+            missing_invoice_fields.append("销售方")
+        if missing_invoice_fields:
+            if "核对状态" not in result_columns:
+                result_columns.append("核对状态")
+            _mark_for_review(row, f"未可靠识别：{'、'.join(missing_invoice_fields)}")
         # Populate the requested visible columns as well as the internal
         # invoice fields.  The UI preview must not show an apparently empty
         # row for a legitimate invoice-only reimbursement.
@@ -797,9 +828,21 @@ def _add_compact_image(sheet, cell: str, image_bytes: bytes | None, width: int, 
         image = ExcelImage(BytesIO(image_bytes))
     except Exception:
         return False
-    image.width = width
-    image.height = height
-    sheet.add_image(image, cell)
+    scale = min(width / max(image.width, 1), height / max(image.height, 1))
+    image.width = max(1, round(image.width * scale))
+    image.height = max(1, round(image.height * scale))
+    row, column = coordinate_to_tuple(cell)
+    marker = AnchorMarker(
+        col=column - 1,
+        colOff=pixels_to_EMU(max(0, (width - image.width) / 2)),
+        row=row - 1,
+        rowOff=pixels_to_EMU(max(0, (height - image.height) / 2)),
+    )
+    image.anchor = OneCellAnchor(
+        _from=marker,
+        ext=XDRPositiveSize2D(cx=pixels_to_EMU(image.width), cy=pixels_to_EMU(image.height)),
+    )
+    sheet.add_image(image)
     return True
 
 def _lookup_image(images: dict[str, bytes], source: str) -> bytes | None:
@@ -1117,7 +1160,7 @@ class LocalReceiptExtractor:
 
             reader = PdfReader(BytesIO(image_bytes))
             text_lines = [line.strip() for page in reader.pages for line in (page.extract_text() or "").splitlines() if line.strip()]
-            if text_lines:
+            if _pdf_text_is_reliable(text_lines):
                 return text_lines
             # Scanned/image-only PDFs have no text layer. Render every page and
             # combine their local OCR output so a multi-page invoice is complete.
