@@ -7,8 +7,8 @@ services:
       - "${HOST_PORT:-8766}:8765"
     environment:
       RECEIPT_DATA_DIR: /data
-      # PaddleOCR 模型已经在 Docker build 阶段固化，运行时不需要联网下载。
-      RECEIPT_OCR_ENGINE: "${RECEIPT_OCR_ENGINE:-paddle}"
+      # 默认使用 RapidOCR，避免 Paddle 模型源不可达时阻塞启动；模型齐备后可改为 paddle。
+      RECEIPT_OCR_ENGINE: "${RECEIPT_OCR_ENGINE:-rapidocr}"
       # 留空即可关闭访问口令；如需保护局域网服务，再在 .env 中设置。
       RECEIPT_ACCESS_TOKEN: "${RECEIPT_ACCESS_TOKEN:-}"
       RECEIPT_OCR_THREADS: "${RECEIPT_OCR_THREADS:-2}"
