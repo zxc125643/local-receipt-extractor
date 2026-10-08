@@ -19,7 +19,7 @@
 ```bash
 cp .env.example .env
 nano .env                 # RECEIPT_ACCESS_TOKEN 留空即可免口令访问
-# 默认使用 RapidOCR，避免首次启动等待 Paddle 模型下载；需要时可改为 RECEIPT_OCR_ENGINE=paddle
+# Docker 构建阶段会预下载并固化 PaddleOCR 模型，运行时不需要联网下载。
 docker compose up -d --build
 docker compose ps
 ```
