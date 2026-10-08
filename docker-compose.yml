@@ -7,7 +7,8 @@ services:
       - "${HOST_PORT:-8766}:8765"
     environment:
       RECEIPT_DATA_DIR: /data
-      RECEIPT_OCR_ENGINE: paddle
+      # RapidOCR 使用镜像内置模型，首次启动不依赖外网下载；需要 Paddle 时可在 .env 改为 paddle。
+      RECEIPT_OCR_ENGINE: "${RECEIPT_OCR_ENGINE:-rapidocr}"
       # 留空即可关闭访问口令；如需保护局域网服务，再在 .env 中设置。
       RECEIPT_ACCESS_TOKEN: "${RECEIPT_ACCESS_TOKEN:-}"
       RECEIPT_OCR_THREADS: "${RECEIPT_OCR_THREADS:-2}"
