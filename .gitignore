@@ -2,3 +2,5 @@ __pycache__/
 *.pyc
 .venv/
 uv.lock
+/paddle-models/official_models/*
+!/paddle-models/official_models/.gitkeep

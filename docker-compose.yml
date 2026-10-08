@@ -1,14 +1,21 @@
 services:
   receipt-extractor:
-    build: .
+    build:
+      context: .
+      network: host
+      args:
+        HTTP_PROXY: "${HTTP_PROXY:-}"
+        HTTPS_PROXY: "${HTTPS_PROXY:-}"
+        http_proxy: "${HTTP_PROXY:-}"
+        https_proxy: "${HTTPS_PROXY:-}"
     container_name: local-receipt-extractor
     restart: unless-stopped
     ports:
       - "${HOST_PORT:-8766}:8765"
     environment:
       RECEIPT_DATA_DIR: /data
-      # 默认使用 RapidOCR，避免 Paddle 模型源不可达时阻塞启动；模型齐备后可改为 paddle。
-      RECEIPT_OCR_ENGINE: "${RECEIPT_OCR_ENGINE:-rapidocr}"
+      # Paddle 中文模型在构建镜像时下载或从 paddle-models/official_models 复制进镜像。
+      RECEIPT_OCR_ENGINE: "${RECEIPT_OCR_ENGINE:-paddle}"
       # 留空即可关闭访问口令；如需保护局域网服务，再在 .env 中设置。
       RECEIPT_ACCESS_TOKEN: "${RECEIPT_ACCESS_TOKEN:-}"
       RECEIPT_OCR_THREADS: "${RECEIPT_OCR_THREADS:-2}"

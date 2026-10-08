@@ -9,6 +9,9 @@ RUN apt-get update \
 COPY backend/requirements.txt backend/paddle-requirements.txt ./
 RUN pip install --no-cache-dir -i https://mirrors.aliyun.com/pypi/simple -r requirements.txt \
     && pip install --no-cache-dir -i https://mirrors.aliyun.com/pypi/simple -r paddle-requirements.txt
+# Use a preseeded cache when available; a fresh checkout downloads the models at build time.
+COPY paddle-models/official_models /root/.paddlex/official_models
+RUN python -c "from paddleocr import PaddleOCR; PaddleOCR(lang='ch', use_doc_orientation_classify=False, use_doc_unwarping=False, use_textline_orientation=False)"
 COPY backend ./backend
 COPY static ./static
 EXPOSE 8765
