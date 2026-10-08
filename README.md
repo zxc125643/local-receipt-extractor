@@ -26,7 +26,7 @@ docker compose ps
 
 默认访问地址：`http://服务器IP:8766/`。可在 `.env` 修改 `HOST_PORT`，容器内部始终使用 8765。
 
-Docker 构建阶段会加载 `PP-OCRv6_medium_det` 和 `PP-OCRv6_medium_rec`。全新克隆仓库时，构建机需要能访问 ModelScope；在本机 Ubuntu 部署时，`.env.example` 默认使用 Clash 的 `127.0.0.1:7897` 代理。若模型已下载，可放到 `paddle-models/official_models/`，构建时会复制到镜像中。运行容器不挂载模型缓存卷，也不会在运行时联网下载模型。Python 包使用阿里云镜像安装。
+Docker 构建阶段会加载 `PP-OCRv6_medium_det` 和 `PP-OCRv6_medium_rec`。全新克隆仓库时，构建机需要能访问 ModelScope；在本机 Ubuntu 部署时，`.env.example` 默认让 HTTPS 下载经 Clash 的 `127.0.0.1:7897` 代理，HTTP 保持直连。若模型已下载，可放到 `paddle-models/official_models/`，构建时会复制到镜像中。运行容器不挂载模型缓存卷，也不会在运行时联网下载模型。Python 包使用阿里云镜像安装。
 
 ## 数据与隐私
 
