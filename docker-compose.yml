@@ -1,13 +1,6 @@
 services:
   receipt-extractor:
-    build:
-      context: .
-      network: host
-      args:
-        HTTP_PROXY: "${HTTP_PROXY:-}"
-        HTTPS_PROXY: "${HTTPS_PROXY:-}"
-        http_proxy: "${HTTP_PROXY:-}"
-        https_proxy: "${HTTPS_PROXY:-}"
+    build: .
     container_name: local-receipt-extractor
     restart: unless-stopped
     ports:
